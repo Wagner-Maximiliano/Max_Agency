@@ -73,22 +73,45 @@ From this point on, **any change to the agency itself goes through a PR** — br
 
 ### Step 2 — Set persistent environment variables
 
-These tell Hermes where the agency lives. `PROJECT_REPO` you'll change later per project — for now leave it unset or pointed at the agency itself for smoke-testing.
+These variables tell the agency scripts and cron jobs which cache folder to use, and (later) which project to work on. You set them once so you never have to type them again.
+
+**Where to do this:** open the Windows Start menu, search for **Windows PowerShell**, and open it. The folder it starts in doesn't matter — these commands work from anywhere.
+
+**Part A — set them in the current window** (needed now so Step 3 can see them):
 
 ```powershell
-$env:MAX_AGENCY_CACHE   = "$env:USERPROFILE\.hermes-cache\Max_Agency"
-$env:TELEGRAM_BOT_TOKEN = "..."   # optional, for escalations
-$env:TELEGRAM_CHAT_ID   = "..."   # optional
-# PROJECT_REPO is set per-project, not here. See "Starting a new project" below.
+$env:MAX_AGENCY_CACHE = "$env:USERPROFILE\.hermes-cache\Max_Agency"
 ```
 
-Add the persistent ones to your PowerShell profile if you want them across sessions:
+If you have Telegram and want escalation alerts on your phone, also set:
+
+```powershell
+$env:TELEGRAM_BOT_TOKEN = "your-bot-token-here"
+$env:TELEGRAM_CHAT_ID   = "your-chat-id-here"
+```
+
+If you don't have Telegram set up yet, skip those two lines. You can add them later.
+
+> `PROJECT_REPO` is **not** set here. You set it once per project, just before you kick off each new project. See "Starting a new project" below.
+
+**Part B — make them permanent** so they survive closing and reopening PowerShell:
+
+Run this in the same PowerShell window:
 
 ```powershell
 notepad $PROFILE
 ```
 
-…then paste the same lines into the profile file and save.
+Notepad will open (it may ask to create the file — say yes). Paste these lines at the bottom of whatever is already there, then save and close Notepad:
+
+```powershell
+$env:MAX_AGENCY_CACHE = "$env:USERPROFILE\.hermes-cache\Max_Agency"
+# Uncomment and fill in if you use Telegram:
+# $env:TELEGRAM_BOT_TOKEN = "your-bot-token-here"
+# $env:TELEGRAM_CHAT_ID   = "your-chat-id-here"
+```
+
+That file (`$PROFILE`) is your PowerShell startup script — it runs automatically every time you open a new PowerShell window, so the variables will always be there.
 
 ### Step 3 — Bootstrap Hermes (paste prompts H1 → H2 → H3 below)
 
