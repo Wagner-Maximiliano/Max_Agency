@@ -11,7 +11,7 @@ hermes -p orchestrator cron add \
   --name "max-agency-orchestrator-tick" \
   --schedule "* * * * *" \
   --prompt-file "$MAX_AGENCY_CACHE/hermes-config/poll-prompts/orchestrator-tick.md" \
-  --env "AGENCY_REPO=$AGENCY_REPO" \
+  --env "PROJECT_REPO=$PROJECT_REPO" \
   --env "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN" \
   --env "TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID" \
   --timeout 300
@@ -24,7 +24,7 @@ hermes -p coder cron add \
   --name "max-agency-coder-tick" \
   --schedule "* * * * *" \
   --prompt-file "$MAX_AGENCY_CACHE/hermes-config/poll-prompts/coder-tick.md" \
-  --env "AGENCY_REPO=$AGENCY_REPO" \
+  --env "PROJECT_REPO=$PROJECT_REPO" \
   --timeout 1500
 ```
 
@@ -33,7 +33,7 @@ hermes -p coder cron add \
 | Var | Purpose |
 |---|---|
 | `MAX_AGENCY_CACHE` | Local path to the cloned public repo (default: `~/.hermes-cache/Max_Agency`) |
-| `AGENCY_REPO` | The project repo to operate on, e.g. `Wagner-Maximiliano/my-project` |
+| `PROJECT_REPO` | The project repo to operate on, e.g. `Wagner-Maximiliano/my-project` |
 | `TELEGRAM_BOT_TOKEN` | Optional; for Orchestrator escalations |
 | `TELEGRAM_CHAT_ID` | Optional; for Orchestrator escalations |
 
