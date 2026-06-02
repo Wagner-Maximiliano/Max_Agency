@@ -37,9 +37,9 @@ Register-ScheduledTask `
   -Trigger $trigger `
   -Settings $settings `
   -Principal $principal `
-  -Description "Max Agency Claude Code routine — polls GitHub every $IntervalMinutes min, picks up assigned issues, exits." `
+  -Description "Max Agency Claude Code routine - polls GitHub every $IntervalMinutes min, picks up assigned issues, exits." `
   -Force | Out-Null
 
-Write-Information "Registered scheduled task '$TaskName' — runs every $IntervalMinutes min against $Repo" -InformationAction Continue
+Write-Information "Registered scheduled task '$TaskName' - runs every $IntervalMinutes min against $Repo" -InformationAction Continue
 Write-Information "To inspect: Get-ScheduledTask -TaskName '$TaskName'" -InformationAction Continue
 Write-Information "To unregister: Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false" -InformationAction Continue

@@ -81,6 +81,19 @@ Paste **H1**, wait for `BOOTSTRAP_H1_COMPLETE`. Edit the first line of **H2** wi
 
 ### A4 — Install the Claude Code routine
 
+**Prerequisites (one-time installs):**
+
+```powershell
+# 1. Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+claude --version   # should print a version
+
+# 2. GitHub CLI  (https://cli.github.com)
+gh --version       # should print a version
+gh auth login      # authenticate once; choose HTTPS + browser
+gh auth status     # should show your account as active
+```
+
 Windows PowerShell (fill in your project repo):
 
 ```powershell
@@ -347,10 +360,10 @@ rm -rf ~/.hermes-cache/Max_Agency
 | H2 FAIL: prompt files missing | H1 didn't finish. Re-run H1. |
 | H3 CHECK 8 FAIL | H2 didn't finish or kept the placeholder. Re-run H2, then H3. |
 | Set `$env:PROJECT_REPO` but Hermes ignores it | Expected — Windows ≠ WSL. For Hermes use H2; for Claude Code routine use `register-task.ps1`. |
-| H2 `--prompt-file` rejected | Add "use --prompt fallback for both jobs" to the top of H2 and re-paste. |
 | Cron not firing | WSL: `hermes -p orchestrator cron list`, check `hermes status`, see `~/.hermes/profiles/orchestrator/escalations.log`. |
 | Wrong project | Hermes: re-paste H2 with corrected repo. Windows: re-run `register-task.ps1`. |
-| Routine not picking up issues | Windows: `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine` → History. Ensure `claude` is on PATH. |
+| Routine not picking up issues | Windows: `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine` → History. Verify `claude --version` and `gh auth status` both work. |
+| `register-task.ps1` fails with "positional parameter... GitHub" | PowerShell 5.1 encoding bug — the `.ps1` file has a non-ASCII character (em-dash). Re-pull the latest agency repo: `git pull`. |
 | Both runtimes grab one issue | Issue has two `assigned:*` labels. Fix to one, re-add `ready`. |
 | OpenRouter rate limits | WSL: get job ID from `hermes -p orchestrator cron list`, `hermes cron remove <id>`, re-run H2 (change `* * * * *` to `*/5 * * * *` in the prompt). |
 
