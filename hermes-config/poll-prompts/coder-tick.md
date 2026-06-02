@@ -14,13 +14,13 @@ Repo: read `PROJECT_REPO` env var. If unset, exit `NO_REPO`.
 
 2. **Find one issue to claim.** Run:
    ```
-   gh issue list --repo $PROJECT_REPO --label "ready" --label "assigned:hermes-coder" --state open --json number,title,labels,assignees --limit 20
+   gh issue list --repo $PROJECT_REPO --label "in-progress" --label "assigned:hermes-coder" --state open --json number,title,labels,assignees --limit 20
    ```
-   Filter out any with non-empty `assignees`. Sort by issue number ascending. If none: print `<UTC timestamp> | NO_WORK` and exit.
+   Filter out any with non-empty `assignees` (already claimed). Sort by issue number ascending. If none: print `<UTC timestamp> | NO_WORK` and exit.
 
 3. **Claim it.** Pick the lowest. Run:
    ```
-   gh issue edit <N> --repo $PROJECT_REPO --add-assignee @me --remove-label ready --add-label in-progress
+   gh issue edit <N> --repo $PROJECT_REPO --add-assignee @me
    ```
    Post a one-line comment: `Picked up by Hermes coder. Worktree: worktrees/hermes/<N>-<slug>. <timestamp>`.
 

@@ -15,8 +15,8 @@ Your role for this tick is determined by which label is on the next available is
 
 ## Procedure (follow exactly, in order)
 
-1. **Discover**. Run `gh issue list --repo $env:PROJECT_REPO --label "ready" --state open --json number,title,labels,assignees --limit 20`.
-2. **Filter**. Drop any issue with a non-empty `assignees` list (already taken). Drop any without a `assigned:claude-*` label.
+1. **Discover**. Run `gh issue list --repo $env:PROJECT_REPO --label "in-progress" --label "assigned:claude-architect" --state open --json number,title,labels,assignees --limit 20`, then repeat with `assigned:claude-cto` and `assigned:claude-coder`. Merge the results.
+2. **Filter**. Drop any issue with a non-empty `assignees` list (already claimed). Drop any without an `assigned:claude-*` label.
 3. **Pick one**. Lowest issue number wins. If none, exit cleanly with message `NO_WORK`.
 4. **Claim**. Assign the issue to yourself: `gh issue edit <N> --add-assignee @me`. Replace label `ready` with `in-progress`.
 5. **Load role**. Read the `agents/<role>.md` file matching the label.
