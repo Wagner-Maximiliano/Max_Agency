@@ -10,18 +10,22 @@ There are **three** locations involved in running the agency. They are not the s
 
 | # | What it is | Where it lives | Who edits it | When you touch it |
 |---|---|---|---|---|
-| 1 | **The agency repo** — the *engine* (agent prompts, skills, scripts, configs) | Your machine: `C:\Users\lobster\Github_Projects\Max_Agency`<br>GitHub mirror: `github.com/Wagner-Maximiliano/Max_Agency` | You (rarely) — only to upgrade the agency itself (add a skill, tweak an agent prompt) | Almost never |
-| 2 | **Hermes's cache** — Hermes's private read-only copy of the agency, auto-pulled from GitHub | `C:\Users\lobster\.hermes-cache\Max_Agency` | Hermes only — auto-clone, auto-pull every tick | Never |
-| 3 | **A project repo** — where actual product work happens for one project: `PLAN.md`, GitHub issues, branches, PRs, the product code | A new GitHub repo per project, e.g. `github.com/Wagner-Maximiliano/my-cool-app` | The agents | Once at kickoff (create empty repo, set env var); then only to approve merges and resolve escalations |
+| 1 | **The agency repo** — the *engine* (agent prompts, skills, scripts, configs) | Your machine: `C:\Users\lobster\Github_Projects\Max_Agency`<br>GitHub mirror: `github.com/Wagner-Maximiliano/Max_Agency` | You (rarely) — only to upgrade the agency itself | Almost never |
+| 2 | **Hermes's cache** — Hermes's private read-only copy of the agency, auto-pulled from GitHub | Inside WSL: `~/.hermes-cache/Max_Agency` | Hermes only — auto-clone, auto-pull every tick | Never |
+| 3 | **A project repo** — where actual product work happens: `PLAN.md`, issues, branches, PRs, code | A new GitHub repo per project, e.g. `github.com/Wagner-Maximiliano/my-cool-app` | The agents | Once at kickoff (create the empty repo on GitHub); then only approve merges and resolve escalations |
+
+### Two environments, one machine
+
+**Hermes runs inside WSL** (Windows Subsystem for Linux) — a Linux environment embedded in your Windows machine. WSL and Windows are isolated: a variable you set in Windows PowerShell (`$env:SOMETHING = "..."`) is **invisible to Hermes**, and vice versa.
+
+This matters because:
+- **Step 2** (env vars) only applies to the **Windows side** (the Claude Code routine).
+- **H2** (the Hermes bootstrap prompt) does not rely on Windows env vars — the project repo is typed directly into the prompt before you paste it.
 
 ### The two big rules
 
-1. **The agency repo is the toolkit. A project repo is the workshop.** You never copy files from the agency into a project. The agents read agency files out of Hermes's cache (#2) and act on the project repo (#3) via the GitHub API.
-2. **A project repo can be empty and remote-only.** You do not have to clone it to your machine. The Architect, CTO, Orchestrator, and coders all talk to it through GitHub.
-
-### The `PROJECT_REPO` env var
-
-`PROJECT_REPO` (set in your shell) tells Hermes and the Claude Code routine **which project is currently active**. Change it when you start a new project. The agency itself never changes — only the project pointer changes.
+1. **The agency repo is the toolkit. A project repo is the workshop.** You never copy files between them. The agents read agency files out of Hermes's cache (#2) and act on the project repo (#3) via GitHub.
+2. **A project repo can be empty and remote-only.** You do not need to clone it to your machine. The agents work against it through the GitHub API.
 
 ---
 
@@ -43,13 +47,13 @@ The agency's binding documents — read by every agent on every cold start — a
 
 ## First-time setup (do this once per machine)
 
-This sets up the **agency** (location #1 + #2 above). You only do this once. You do **not** repeat it per project.
+This sets up the **agency** (locations #1 + #2 above). You only do this once. You do **not** repeat it per project.
 
 ### Step 1 — Publish the agency repo to GitHub
 
-The agency must exist on GitHub at **https://github.com/Wagner-Maximiliano/Max_Agency** so Hermes can `git clone` it into its cache. If you've followed the previous setup steps in this repo, this is already done — skip to Step 2.
+The agency must exist on GitHub at **https://github.com/Wagner-Maximiliano/Max_Agency** so Hermes can `git clone` it into its WSL cache. If you've already done this (the repo is on GitHub), skip to Step 2.
 
-If you are setting up on a fresh machine and the local copy is not yet a git repo:
+If you are on a fresh machine and the local copy is not yet a git repo, open Windows PowerShell and run:
 
 ```powershell
 cd "C:\Users\lobster\Github_Projects\Max_Agency"
@@ -60,76 +64,53 @@ git commit -m "initial: max agency baseline"
 git push -u origin main
 ```
 
-If you already have a clone and just want to sync local agency-side work:
+From this point on, **any change to the agency itself goes through a PR** — branch off `main`, push, open a PR, merge from GitHub. You can do this from your phone.
 
-```powershell
-cd "C:\Users\lobster\Github_Projects\Max_Agency"
-git add .
-git commit -m "<one-line what changed>"
-git push
-```
+### Step 2 — Set Windows environment variables (for Claude Code routine only)
 
-From this point on, **any change to the agency itself goes through a PR** — branch off `main`, push, open a PR, merge from GitHub (you can do this from your phone via the GitHub mobile app or web).
+> **Important:** These variables only affect the **Windows side** of the machine (the Claude Code routine / Task Scheduler job). Hermes runs in WSL and does not see these — that's handled separately in the H2 prompt below.
 
-### Step 2 — Set persistent environment variables
+Open Windows PowerShell (Start menu → search "Windows PowerShell" → open it). The folder it starts in doesn't matter.
 
-These variables tell the agency scripts and cron jobs which cache folder to use, and (later) which project to work on. You set them once so you never have to type them again.
-
-**Where to do this:** open the Windows Start menu, search for **Windows PowerShell**, and open it. The folder it starts in doesn't matter — these commands work from anywhere.
-
-**Part A — set them in the current window** (needed now so Step 3 can see them):
+**Part A — set for the current window** (needed for Step 4 below):
 
 ```powershell
 $env:MAX_AGENCY_CACHE = "$env:USERPROFILE\.hermes-cache\Max_Agency"
 ```
 
-If you have Telegram and want escalation alerts on your phone, also set:
-
-```powershell
-$env:TELEGRAM_BOT_TOKEN = "your-bot-token-here"
-$env:TELEGRAM_CHAT_ID   = "your-chat-id-here"
-```
-
-If you don't have Telegram set up yet, skip those two lines. You can add them later.
-
-> `PROJECT_REPO` is **not** set here. You set it once per project, just before you kick off each new project. See "Starting a new project" below.
-
-**Part B — make them permanent** so they survive closing and reopening PowerShell:
-
-Run this in the same PowerShell window:
+**Part B — make permanent** so they survive closing and reopening PowerShell:
 
 ```powershell
 notepad $PROFILE
 ```
 
-Notepad will open (it may ask to create the file — say yes). Paste these lines at the bottom of whatever is already there, then save and close Notepad:
+Notepad opens (say yes if it asks to create the file). Paste these lines at the bottom, then save and close:
 
 ```powershell
 $env:MAX_AGENCY_CACHE = "$env:USERPROFILE\.hermes-cache\Max_Agency"
-# Uncomment and fill in if you use Telegram:
+# Uncomment and fill in if you use Telegram for escalation alerts:
 # $env:TELEGRAM_BOT_TOKEN = "your-bot-token-here"
 # $env:TELEGRAM_CHAT_ID   = "your-chat-id-here"
 ```
 
-That file (`$PROFILE`) is your PowerShell startup script — it runs automatically every time you open a new PowerShell window, so the variables will always be there.
+This file runs every time you open a new PowerShell window, so the variables are always there.
 
 ### Step 3 — Bootstrap Hermes (paste prompts H1 → H2 → H3 below)
 
-Open a Hermes session in the **default** profile:
+Hermes lives in WSL. Open your WSL terminal (Start menu → search "WSL" or "Ubuntu" or whichever distro you use) and run:
 
-```powershell
+```bash
 hermes chat
 ```
 
-Paste **H1** first. Wait for it to finish. Verify it ends with `BOOTSTRAP_H1_COMPLETE`. Then paste **H2**. Verify `BOOTSTRAP_H2_COMPLETE`. Then paste **H3**. Verify `BOOTSTRAP_COMPLETE`.
+Paste **H1** first. Wait for `BOOTSTRAP_H1_COMPLETE`. Then **edit H2** (fill in your project repo on the one marked line), paste it, wait for `BOOTSTRAP_H2_COMPLETE`. Then paste **H3**, wait for `BOOTSTRAP_COMPLETE`.
 
-> For H2 to succeed, `PROJECT_REPO` must be set in your shell. Set it to `Wagner-Maximiliano/Max_Agency` for the smoke test, or to your first real project repo if you already created it. You can change it later — H2 only reads it once to bake into the cron jobs' env.
+### Step 4 — Install the Claude Code routine (Windows side)
 
-### Step 4 — Install the Claude Code routine
-
-This registers a Windows Task Scheduler job that wakes Claude Code every 10 minutes to pick up issues labelled `assigned:claude-*`.
+This registers a Windows Task Scheduler job that wakes Claude Code every 10 minutes to pick up issues labelled `assigned:claude-*`. Run this in Windows PowerShell:
 
 ```powershell
+$env:PROJECT_REPO = "Wagner-Maximiliano/your-project-repo"   # fill in your current project
 cd "C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine"
 .\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "C:\Users\lobster\Github_Projects\Max_Agency" -IntervalMinutes 10
 ```
@@ -146,46 +127,33 @@ That's it. Agency setup is done. You won't redo this unless you reinstall Window
 
 ## Starting a new project
 
-This is what you do **every time** you want the agency to build something new. It's three small steps.
+This is what you do **every time** you want the agency to build something new. Three steps.
 
 ### 1. Create an empty GitHub repo for the project
 
-Go to github.com → New repository. Pick a name (e.g. `my-cool-app`). Leave it empty (no README, no .gitignore, no license — the Architect will create everything).
+Go to github.com → New repository. Pick a name (e.g. `my-cool-app`). **Leave it completely empty** — no README, no .gitignore, no licence. The Architect creates everything.
 
-You do **not** need to clone it to your machine. The agents work against it remotely.
+You do **not** need to clone it to your machine.
 
-### 2. Point the agency at the new project
+### 2. Re-run H2 and Step 4 with the new project repo
 
-In your PowerShell, update the env var:
+**Hermes side (WSL):** Edit the `PROJECT_REPO` line at the top of the H2 prompt (see below) to your new project repo, then paste H2 into a Hermes chat session. This updates the cron jobs to point at the new project.
+
+**Claude Code routine (Windows):** In Windows PowerShell:
 
 ```powershell
 $env:PROJECT_REPO = "Wagner-Maximiliano/my-cool-app"
-```
-
-If your cron jobs are already running with an old `PROJECT_REPO` baked in, re-register them by pasting **H2** again — it'll update the env on the existing jobs (or remove and re-add them).
-
-You may also want to re-run Step 4 of first-time setup so the Claude Code routine targets the new repo:
-
-```powershell
 cd "C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine"
 .\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "C:\Users\lobster\Github_Projects\Max_Agency" -IntervalMinutes 10
 ```
 
-(`register-task.ps1` replaces the existing scheduled task if one is registered under the same name.)
-
 ### 3. Kick off the Architect
 
-Open the Claude Code Windows app. Start a new session in any directory — directory doesn't matter, the Architect operates on the GitHub project repo, not on local files. Paste the **Architect kickoff prompt** (see below), filling in your project brief and the target repo.
+Open the Claude Code Windows app. Start a new session in any directory — the folder doesn't matter, the Architect operates on GitHub. Paste the **Architect kickoff prompt** (below), filling in your project brief and the target repo name.
 
-The Architect will:
+The Architect will ask you up to 5 clarifying questions, draft `PLAN.md`, get CTO approval, then ask you for one explicit ack before handing off to the Orchestrator.
 
-1. Clone the **agency repo** for reference (to read its own role contract + MDP/AMA/standards/skills).
-2. Ask you up to 5 clarifying questions in one batch.
-3. Draft `PLAN.md` and commit it to the **project repo**.
-4. Open a tracking issue and request CTO review.
-5. After CTO approves and you give one explicit ack, hand off to the Orchestrator.
-
-From that point on you do not touch anything. Both Hermes profiles and the Claude Code routine pick up assigned issues automatically.
+From that point on, do nothing. Hermes and Claude Code pick up assigned issues automatically.
 
 You only act again at: merge approval clicks, Telegram escalations, end-of-project review.
 
@@ -193,7 +161,7 @@ You only act again at: merge approval clicks, Telegram escalations, end-of-proje
 
 ## Hermes bootstrap prompts
 
-Paste each block verbatim into a Hermes session (default profile, `hermes chat`). Do not edit them. Wait for the expected output before pasting the next one.
+Open a Hermes session in WSL (`hermes chat`). Paste each block verbatim. Wait for the expected output before pasting the next one.
 
 ### H1 — Bootstrap profiles
 
@@ -202,7 +170,7 @@ You are bootstrapping the Max Agency on this machine. Follow these steps in orde
 
 CONSTANTS:
 - PUBLIC_REPO = https://github.com/Wagner-Maximiliano/Max_Agency
-- CACHE_DIR   = $HOME/.hermes-cache/Max_Agency  (Windows: $env:USERPROFILE\.hermes-cache\Max_Agency)
+- CACHE_DIR   = $HOME/.hermes-cache/Max_Agency
 - PROFILES    = orchestrator, coder
 
 PROCEDURE:
@@ -227,24 +195,29 @@ STOP. Do not proceed beyond step 3.
 
 **Expected last line:** `BOOTSTRAP_H1_COMPLETE`
 
+---
+
 ### H2 — Register cron jobs
 
+> **Before pasting:** replace `Wagner-Maximiliano/REPLACE-WITH-YOUR-PROJECT-REPO` on the first line with your actual project repo (e.g. `Wagner-Maximiliano/Surviving_The_AI_World`). Everything else paste verbatim.
+
 ```
+PROJECT_REPO = Wagner-Maximiliano/REPLACE-WITH-YOUR-PROJECT-REPO
+
 You are continuing Max Agency bootstrap. H1 must have completed. Follow these steps. Print [OK] or [FAIL: <reason>] after each.
 
-CONSTANTS:
-- PROJECT_REPO  = (read from env var PROJECT_REPO; if unset, FAIL the whole prompt)
+CONSTANTS (use the PROJECT_REPO value from the first line of this message):
 - CACHE_DIR     = $HOME/.hermes-cache/Max_Agency
 - ORCH_PROMPT   = $CACHE_DIR/hermes-config/poll-prompts/orchestrator-tick.md
 - CODER_PROMPT  = $CACHE_DIR/hermes-config/poll-prompts/coder-tick.md
 
 PROCEDURE:
 
-1. Verify PROJECT_REPO is set. If not, emit FAIL and abort.
+1. Confirm PROJECT_REPO is set from the first line of this message. Print its value. If the value is still the placeholder "REPLACE-WITH-YOUR-PROJECT-REPO", emit FAIL and abort.
 
 2. Verify both prompt files exist. If either is missing, emit FAIL and abort.
 
-3. Register the orchestrator cron job. Use this exact command (substitute $vars):
+3. Register the orchestrator cron job:
    hermes -p orchestrator cron add \
      --name "max-agency-orchestrator-tick" \
      --schedule "* * * * *" \
@@ -254,7 +227,7 @@ PROCEDURE:
      --env "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}" \
      --env "TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}" \
      --timeout 300
-   If `hermes cron add` does not support --prompt-file in this version, read the file contents and pass them via --prompt instead.
+   If `hermes cron add` does not support --prompt-file, read the file and pass contents via --prompt instead.
 
 4. Register the coder cron job:
    hermes -p coder cron add \
@@ -266,7 +239,7 @@ PROCEDURE:
      --timeout 1500
    Same --prompt fallback if needed.
 
-5. Run `hermes -p orchestrator cron list` and `hermes -p coder cron list`. Confirm each profile shows exactly one job named as above.
+5. Run `hermes -p orchestrator cron list` and `hermes -p coder cron list`. Confirm each shows exactly one job. Print the PROJECT_REPO value baked into each job's env to confirm it is correct.
 
 OUTPUT CONTRACT:
 - One [OK] / [FAIL: …] line per step.
@@ -277,6 +250,8 @@ STOP after step 5.
 ```
 
 **Expected last line:** `BOOTSTRAP_H2_COMPLETE`
+
+---
 
 ### H3 — Smoke test
 
@@ -292,7 +267,7 @@ CHECKS:
 5. `cat $HOME/.hermes/profiles/coder/SOUL.md` starts with "# Coder (Hermes side) — Soul". (PASS/FAIL)
 6. `ls $HOME/.hermes/profiles/orchestrator/skills/ | wc -l` is at least 1. (PASS/FAIL)
 7. `ls $HOME/.hermes/profiles/coder/skills/ | wc -l` is at least 1. (PASS/FAIL)
-8. `env | grep PROJECT_REPO` returns a non-empty value. (PASS/FAIL)
+8. The orchestrator cron job env contains a non-placeholder PROJECT_REPO value (not empty, not "REPLACE-WITH-YOUR-PROJECT-REPO"). Print the value. (PASS/FAIL)
 
 OUTPUT CONTRACT:
 - 8 lines, one per check: "CHECK <n>: PASS" or "CHECK <n>: FAIL — <reason>".
@@ -307,7 +282,7 @@ STOP.
 
 ## Architect kickoff prompt (Claude Code app)
 
-Open Claude Code in any directory. Paste this:
+Open Claude Code in any directory. Fill in the two placeholders and paste:
 
 ```
 You are the Architect of the Max Agency. Your role contract is at https://github.com/Wagner-Maximiliano/Max_Agency/blob/main/agents/architect.md — fetch it (or clone the repo) and follow it exactly. Also read docs/MDP.md, docs/AMA.md, CODING_STANDARDS.md, and Highlevel_Plan_V2.0.md from the same repo.
@@ -315,7 +290,7 @@ You are the Architect of the Max Agency. Your role contract is at https://github
 Project brief:
 <one paragraph stating goal, constraints, deadline if any>
 
-Target repo: <owner/repo>   (the empty GitHub repo you just created; this is the PROJECT repo, not the agency)
+Target repo: <owner/repo>   (the empty GitHub repo you just created — this is the PROJECT repo, not the agency)
 
 Begin your workflow. Ask up to 5 clarifying questions in one batched message, then produce PLAN.md and submit it for CTO review.
 ```
@@ -324,14 +299,12 @@ Begin your workflow. Ask up to 5 clarifying questions in one batched message, th
 
 ## Cheat sheet
 
-| Prompt | When | Paste into |
+| Prompt | When | Where |
 |---|---|---|
-| H1 | Once, first-time agency setup | Hermes default profile |
-| H2 | Once after H1; also re-run when you change `PROJECT_REPO` | Hermes default profile |
-| H3 | Once, immediately after H2 | Hermes default profile |
+| H1 | Once, first-time agency setup | WSL — `hermes chat` |
+| H2 | Once after H1; re-run when switching projects (edit the PROJECT_REPO line first) | WSL — `hermes chat` |
+| H3 | Once, immediately after H2 | WSL — `hermes chat` |
 | Architect kickoff | Once per new project | Claude Code Windows app |
-
-After first-time H1–H3 setup, normal operation is: set `PROJECT_REPO` → re-paste H2 (to update cron env) → paste Architect kickoff. That's it.
 
 ---
 
@@ -339,18 +312,20 @@ After first-time H1–H3 setup, normal operation is: set `PROJECT_REPO` → re-p
 
 | Symptom | Action |
 |---|---|
-| `hermes profile create` says "exists" | Fine, H1 handles this as `[OK skipped]`. Move on. |
-| H1 fails at step 2c (config copy) | Check `$HOME/.hermes/profiles/<name>/` exists. If not, profile creation failed silently — run `hermes profile create <name>` manually and re-run H1. |
-| H2 `--prompt-file` rejected | Your Hermes version uses `--prompt` only. The prompt instructs Hermes to fall back — if it didn't, paste H2 again with explicit "use --prompt fallback for both jobs". |
-| H2 FAIL at step 1 (PROJECT_REPO unset) | You forgot to `$env:PROJECT_REPO = "..."` in this shell. Set it, then re-paste H2. |
-| H3 CHECK 8 FAIL | Same as above — `PROJECT_REPO` not set in this shell. |
-| Cron ticks not firing | `hermes -p orchestrator cron list` — confirm schedule. Check Hermes daemon is running. Inspect `~/.hermes/profiles/orchestrator/escalations.log`. |
-| Cron ticks running against the *wrong* project | H2 bakes `PROJECT_REPO` into the cron job env at registration time. Update `$env:PROJECT_REPO`, re-paste H2 to re-register. |
-| Claude Code routine not picking up issues | `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine`. Check History tab. Make sure `claude` CLI is on PATH. |
-| Claude Code routine pointing at wrong project | Re-run `register-task.ps1` with the new `-Repo $env:PROJECT_REPO`; it replaces the existing task. |
+| `hermes profile create` says "exists" | Fine — H1 handles this as `[OK skipped]`. Move on. |
+| H1 fails at step 2c (config copy) | Check `$HOME/.hermes/profiles/<name>/` exists in WSL. If not, run `hermes profile create <name>` manually in WSL and re-run H1. |
+| H2 `--prompt-file` rejected | Your Hermes version uses `--prompt` only. The prompt instructs Hermes to fall back — if it didn't, paste H2 again with "use --prompt fallback for both jobs" added to the top. |
+| H2 FAIL: placeholder not replaced | You forgot to edit the `PROJECT_REPO = Wagner-Maximiliano/REPLACE-...` line at the top of H2 before pasting. Edit it and re-paste. |
+| H2 FAIL: prompt files missing | H1 didn't complete successfully — the cache wasn't cloned. Re-run H1 first. |
+| H3 CHECK 8 FAIL | H2 didn't complete or baked in the placeholder. Re-edit the PROJECT_REPO line in H2 and re-run H2, then H3. |
+| I set `$env:PROJECT_REPO` in PowerShell but Hermes can't see it | Expected — PowerShell and WSL are separate environments. For Hermes: edit the PROJECT_REPO line in H2 and re-paste it. For the Claude Code routine (Windows): set the PowerShell env var and re-run `register-task.ps1`. |
+| Cron ticks not firing | In WSL: `hermes -p orchestrator cron list` — confirm schedule. Check Hermes daemon is running (`hermes status`). Inspect `~/.hermes/profiles/orchestrator/escalations.log`. |
+| Cron ticks running against the wrong project | In WSL: re-edit the PROJECT_REPO line in H2 and re-paste it. This replaces the baked-in value. |
+| Claude Code routine not picking up issues | In Windows PowerShell: `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine`. Check History tab. Make sure `claude` CLI is on PATH. |
+| Claude Code routine pointing at wrong project | Re-run `register-task.ps1` with the new `-Repo` value; it replaces the existing task. |
 | Issue picked up by both Hermes and Claude Code | Labels collided. Each issue should have exactly one `assigned:*` label. Fix the label, re-add `ready`. |
-| OpenRouter rate-limit errors | Reduce cron frequency: `hermes -p <profile> cron remove …` then re-add with `--schedule "*/5 * * * *"`. |
-| "Where do I edit the agency?" | In `C:\Users\lobster\Github_Projects\Max_Agency`. Push via PR. Hermes pulls from GitHub on next cron tick. |
+| OpenRouter rate-limit errors | In WSL: `hermes -p <profile> cron remove max-agency-<profile>-tick` then re-add with `--schedule "*/5 * * * *"`. |
+| "Where do I edit the agency?" | In `C:\Users\lobster\Github_Projects\Max_Agency` on Windows. Push via PR. Hermes pulls from GitHub on the next cron tick. |
 | "Where do I edit the project's code?" | Nowhere — the agents do. You only review PRs. |
 
 ---
@@ -358,7 +333,7 @@ After first-time H1–H3 setup, normal operation is: set `PROJECT_REPO` → re-p
 ## What you, the human, do
 
 - **Once per machine:** first-time agency setup (Steps 1–4 above). Maybe an hour.
-- **Once per project:** create empty GitHub repo, set `PROJECT_REPO`, paste Architect kickoff. Five minutes.
+- **Once per project:** create empty GitHub repo, edit the PROJECT_REPO line in H2 and re-paste it, re-run Step 4, paste Architect kickoff. Five minutes.
 - **Ongoing:** approve merges. Resolve escalations on Telegram. Kill anything that loops.
 
 Everything else is delegated. If you find yourself doing more than this, the prompts need tightening — file an issue on the agency repo with what felt manual.
@@ -372,6 +347,6 @@ Day-to-day from your phone, using the GitHub mobile app or `github.com` in a bro
 - **Approve merges** — open the PR, scan CTO's `VERDICT: APPROVED` comment + green CI, hit **Merge**.
 - **Resolve escalations** — Telegram pings; reply on Telegram, or comment on the linked issue from GitHub.
 - **Skim status** — the `State.md` file in the project repo root is the snapshot; the Orchestrator regenerates it every tick.
-- **Pause everything** — comment `pause` on any open issue you own, or add label `blocked` from the mobile app. Orchestrator stops dispatching new work for that phase next tick.
+- **Pause everything** — add label `blocked` to any open issue from the GitHub mobile app. Orchestrator stops dispatching new work for that phase next tick.
 
 You should never need to push code from the phone. If you do, the agents have lost the plot — file an issue describing what they got stuck on.
