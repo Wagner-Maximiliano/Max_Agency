@@ -50,6 +50,27 @@ Start from [`_template.md`](_template.md).
 
 ## Index
 
-(Update this section when you add a skill. Keep one line per skill.)
+Update this section when you add a skill. Keep one line per skill.
 
-- _none yet — add your first skill by copying `_template.md`_
+### Max Agency native
+
+- `architect-planning/` — progressive-disclosure interview, assumption ledger, PLAN.md drafting. (architect)
+- `coder-build-task/` — single-issue implementation, in-scope, with tests and a draft PR. (coder)
+- `cto-review/` — adversarial single-pass review with skepticism score and structured verdict. (cto)
+- `github-workflow/` — branch-per-issue, draft PR, CI gate, PR-driven merge. (orchestrator, coder, cto)
+- `quota-guard/` — free-first routing across rolling vendor windows. (orchestrator)
+- `human-testing/` — optional plain-language test guides for GUI phases. (orchestrator)
+
+### MDP — operating layer
+
+- `mdp-core/` — small always-read MDP operating core.
+- `mdp-project-kickoff/`, `mdp-agent-routing/`, `mdp-decision-gates/`, `mdp-kanban-health/`,
+  `mdp-handover-restart/`, `mdp-verification-rollback/`, `mdp-context-budget/`,
+  `mdp-error-observability/`, `mdp-file-safety/`, `mdp-model-cost-governance/`,
+  `mdp-repo-permission-modes/` — load on demand per their `when_to_use`.
+
+## Format note
+
+Skills in this repo follow the agentskills.io shape: one directory per skill containing a `SKILL.md`
+with the frontmatter described above. The flat-file form (`skills/<name>.md`) also works — the
+mandatory discovery rule reads frontmatter from whichever `.md` exists.

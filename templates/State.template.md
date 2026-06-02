@@ -31,3 +31,22 @@
 
 | When | Issue | Reason | Resolution |
 |---|---|---|---|
+
+## Quota status
+
+Manual estimate, refreshed each Orchestrator loop tick. See `skills/quota-guard/SKILL.md`.
+
+- Anthropic (Claude Opus): {{%}} used, reset ~{{timestamp}}
+- OpenRouter (gpt-5):       {{%}} used, reset ~{{timestamp}}
+- OpenRouter (gpt-5-codex): {{%}} used, reset ~{{timestamp}}
+
+## Last session handoff
+
+> Filled by the agent that wraps the session. Read first on cold start.
+
+- **DONE:** {{bullets — what got completed}}
+- **STATE:** branch `{{name}}`, tests {{green|red}}, last commit `{{sha}}` — `{{msg}}`
+- **LEARNED / GOTCHAS:** {{anything the next agent must know to avoid redoing work}}
+- **NEXT SESSION STARTS HERE:** {{exact next task + critical context, file paths, the precise first action}}
+- **BLOCKERS / WAITING ON HUMAN:** {{none | bullets}}
+

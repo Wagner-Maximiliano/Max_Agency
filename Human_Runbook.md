@@ -8,20 +8,41 @@ The Max Agency is an autonomous multi-agent development team coordinated through
 
 You operate this system by **pasting prompts into Hermes**. All heavy lifting is done by Hermes — you almost never edit files directly.
 
+The agency's binding documents — read by every agent on every cold start — are:
+
+- `Highlevel_Plan_V2.0.md` — architecture and gates
+- `CODING_STANDARDS.md` — code rules every coder follows
+- `docs/MDP.md` — operating layer (planning, roles, decision gates)
+- `docs/AMA.md` — agent-to-agent protocol (identity, handoff, cross-provider review, escalation)
+- `skills/` — reusable patterns each role loads on demand per its `applies_to` and `when_to_use`
+
 ## Once-only setup
 
-### Step 1 — Push the baseline to the public repo
+### Step 1 — Publish the agency repo
 
-This local directory **is** the Max_Agency repo. Commit and push whatever is currently here:
+The public URL is **https://github.com/Wagner-Maximiliano/Max_Agency** — this is what Hermes will `git clone` during bootstrap.
+
+If you are setting up on a fresh machine and the local copy is not yet a git repo:
+
+```powershell
+cd "C:\Users\lobster\Github_Projects\Max_Agency"
+git init -b main
+git remote add origin https://github.com/Wagner-Maximiliano/Max_Agency.git
+git add .
+git commit -m "initial: max agency baseline"
+git push -u origin main
+```
+
+If you already have a clone and just want to sync local work:
 
 ```powershell
 cd "C:\Users\lobster\Github_Projects\Max_Agency"
 git add .
-git commit -m "baseline: max agency scaffold"
+git commit -m "<one-line what changed>"
 git push
 ```
 
-The public URL is: **https://github.com/Wagner-Maximiliano/Max_Agency** — this is what Hermes will `git clone` during bootstrap.
+From this point on, **any change to the agency goes through a PR** — branch off `main`, push, open a PR, merge from GitHub (you can do this from your phone via the GitHub mobile app or web).
 
 ### Step 2 — Set environment variables for the current shell
 
@@ -237,3 +258,14 @@ After H1–H3 + the Architect kickoff, you should not paste anything else for no
 Setup once. Kick off each project with the Architect prompt once. Approve merges. Resolve escalations on Telegram. Kill anything that loops. That's the whole job.
 
 Everything else is delegated. If you find yourself doing more than this, the prompts need tightening — file an issue on the public repo with what felt manual.
+
+## Phone workflow
+
+Day-to-day from your phone, using the GitHub mobile app or `github.com` in a browser:
+
+- **Approve merges** — open the PR, scan CTO's `VERDICT: APPROVED` comment + green CI, hit **Merge**.
+- **Resolve escalations** — Telegram pings; you reply on Telegram, or comment on the linked issue from GitHub.
+- **Skim status** — the `State.md` file in the repo root is the snapshot; `gh` regenerates it every Orchestrator tick.
+- **Pause everything** — comment `pause` on any open issue you own, or add label `blocked` from the mobile app. Orchestrator stops dispatching new work for that phase next tick.
+
+You should never need to push code from the phone. If you do, the agents have lost the plot — file an issue describing what they got stuck on.
