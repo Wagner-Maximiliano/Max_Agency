@@ -154,7 +154,7 @@ STOP. Do not proceed beyond step 3.
 
 ### H2
 
-Edit the first line, then paste:
+Edit the first line, then paste. Use the GitHub `owner/repo` slug — not a URL, not a local path (e.g. `Wagner-Maximiliano/Surviving_The_AI_World`).
 
 ```
 PROJECT_REPO = Wagner-Maximiliano/REPLACE-WITH-YOUR-PROJECT-REPO
