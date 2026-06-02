@@ -1,6 +1,15 @@
 # Skills to install into ~/.hermes/profiles/coder/skills/
-# One filename per line (relative to the public repo's /skills/ folder).
+# One path per line, relative to the public repo's /skills/ folder.
 # Lines starting with # are comments.
 
-_template.md
-README.md
+# Max Agency native skills
+coder-build-task/SKILL.md
+github-workflow/SKILL.md
+
+# MDP — only the slices a coder needs
+mdp-core/SKILL.md
+mdp-file-safety/SKILL.md
+mdp-verification-rollback/SKILL.md
+mdp-error-observability/SKILL.md
+mdp-handover-restart/SKILL.md
+mdp-repo-permission-modes/SKILL.md
