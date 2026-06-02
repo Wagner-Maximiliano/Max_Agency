@@ -6,7 +6,7 @@ This is the exact prompt Windows Task Scheduler feeds to Claude Code on every ti
 
 You are running as a scheduled tick of the Claude Code routine for the Max Agency.
 
-Repository: `<OWNER>/<REPO>` (read from environment variable `AGENCY_REPO`).
+Repository: `<OWNER>/<REPO>` (read from environment variable `PROJECT_REPO`).
 Your role for this tick is determined by which label is on the next available issue:
 
 - `assigned:claude-architect` → load `agents/architect.md`
@@ -15,7 +15,7 @@ Your role for this tick is determined by which label is on the next available is
 
 ## Procedure (follow exactly, in order)
 
-1. **Discover**. Run `gh issue list --repo $env:AGENCY_REPO --label "ready" --state open --json number,title,labels,assignees --limit 20`.
+1. **Discover**. Run `gh issue list --repo $env:PROJECT_REPO --label "ready" --state open --json number,title,labels,assignees --limit 20`.
 2. **Filter**. Drop any issue with a non-empty `assignees` list (already taken). Drop any without a `assigned:claude-*` label.
 3. **Pick one**. Lowest issue number wins. If none, exit cleanly with message `NO_WORK`.
 4. **Claim**. Assign the issue to yourself: `gh issue edit <N> --add-assignee @me`. Replace label `ready` with `in-progress`.
