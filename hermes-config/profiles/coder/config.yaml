@@ -1,0 +1,26 @@
+# Hermes profile config — coder
+# Installed to: ~/.hermes/profiles/coder/config.yaml
+
+model:
+  default: openrouter/openai/gpt-5-codex
+  provider: openrouter
+
+auxiliary:
+  compression: openrouter/openai/gpt-5-mini
+
+toolsets:
+  - terminal
+  - skills
+  - memory
+
+approval:
+  mode: smart
+
+session:
+  compression_after_turns: 25
+  keep_last_turns: 20
+
+context_files:
+  - AGENTS.md
+  - .hermes.md
+  - CODING_STANDARDS.md

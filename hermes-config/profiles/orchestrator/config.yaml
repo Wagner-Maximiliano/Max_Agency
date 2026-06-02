@@ -1,0 +1,29 @@
+# Hermes profile config — orchestrator
+# Installed to: ~/.hermes/profiles/orchestrator/config.yaml
+
+model:
+  default: openrouter/openai/gpt-5
+  provider: openrouter
+
+# Auxiliary models (optional). Cheaper model used for compression/summary tasks.
+auxiliary:
+  compression: openrouter/openai/gpt-5-mini
+
+toolsets:
+  - terminal
+  - web
+  - skills
+  - subagent
+  - memory
+
+approval:
+  mode: smart    # auto-approves safe commands, prompts on dangerous ones
+
+session:
+  compression_after_turns: 25
+  keep_last_turns: 20
+
+context_files:
+  # Hermes will auto-discover these in any project dir the orchestrator navigates
+  - AGENTS.md
+  - .hermes.md

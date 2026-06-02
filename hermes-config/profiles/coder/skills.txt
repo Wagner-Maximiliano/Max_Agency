@@ -1,0 +1,6 @@
+# Skills to install into ~/.hermes/profiles/coder/skills/
+# One filename per line (relative to the public repo's /skills/ folder).
+# Lines starting with # are comments.
+
+_template.md
+README.md

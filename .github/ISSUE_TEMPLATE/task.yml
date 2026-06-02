@@ -1,0 +1,66 @@
+name: Agency Task
+description: A single unit of work for a coder agent.
+title: "<phase-id>/<short title>"
+labels: ["task"]
+body:
+  - type: input
+    id: phase
+    attributes:
+      label: Phase
+      placeholder: "1"
+    validations:
+      required: true
+
+  - type: input
+    id: depends_on
+    attributes:
+      label: Depends on
+      description: Comma-separated issue numbers, or "none"
+      placeholder: "#3, #5"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: Assigned model
+      options:
+        - claude-code (sonnet-4.6)
+        - hermes (gpt-5-codex)
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: 1-2 sentences. What does this enable?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Objective and testable. One per line, as checklist.
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: Proposed approach
+      description: Short. Files touched, key functions, libraries.
+    validations:
+      required: true
+
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback
+      description: How to undo if this ships and breaks something.
+    validations:
+      required: true

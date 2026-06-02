@@ -1,0 +1,8 @@
+# Skills to install into ~/.hermes/profiles/orchestrator/skills/
+# One filename per line (relative to the public repo's /skills/ folder).
+# Lines starting with # are comments.
+# When the human adds new skills with `applies_to: orchestrator`, list them here
+# and re-run bootstrap H1 to sync.
+
+_template.md
+README.md

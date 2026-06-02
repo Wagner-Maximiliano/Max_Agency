@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.f.outputs.python }}
+      node: ${{ steps.f.outputs.node }}
+      go: ${{ steps.f.outputs.go }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: f
+        shell: bash
+        run: |
+          echo "python=$([ -f pyproject.toml ] || [ -f requirements.txt ] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "node=$([ -f package.json ] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "go=$([ -f go.mod ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+  python:
+    needs: detect
+    if: needs.detect.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff black pytest
+      - run: |
+          [ -f requirements.txt ] && pip install -r requirements.txt || true
+          [ -f pyproject.toml ] && pip install -e . || true
+      - run: ruff check .
+      - run: black --check .
+      - run: pytest -q
+
+  node:
+    needs: detect
+    if: needs.detect.outputs.node == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --if-present
+      - run: npm test --if-present
+
+  go:
+    needs: detect
+    if: needs.detect.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - run: go vet ./...
+      - run: go test ./...
