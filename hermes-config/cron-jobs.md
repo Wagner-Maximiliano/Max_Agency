@@ -1,54 +1,54 @@
 # Hermes Cron Jobs
 
-Exact commands to register the polling jobs for each profile. Run by bootstrap prompt **H2** in `Human_Runbook.md`. The human normally does not run these by hand.
+Exact commands to register the polling jobs for each profile. **H2 runs these automatically** — the human normally does not run them by hand.
 
-Cron expression `* * * * *` = every minute. Adjust if you want less frequent polling.
+`* * * * *` = every minute. Use `*/5 * * * *` for every 5 minutes if you want to reduce rate.
 
-## Orchestrator — polls every minute
+## Actual hermes cron syntax
 
 ```
-hermes -p orchestrator cron add \
+hermes cron add SCHEDULE PROMPT_TEXT --name NAME --profile PROFILE
+```
+
+- `schedule` and `prompt` are **positional** (not flags)
+- No `--env`, `--prompt-file`, or `--timeout` flags exist
+- `PROJECT_REPO` is stored in `~/.hermes/.env` so all hermes processes can read it
+
+## Orchestrator — registers via H2
+
+```bash
+hermes cron add '* * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" \
   --name "max-agency-orchestrator-tick" \
-  --schedule "* * * * *" \
-  --prompt-file "$MAX_AGENCY_CACHE/hermes-config/poll-prompts/orchestrator-tick.md" \
-  --env "PROJECT_REPO=$PROJECT_REPO" \
-  --env "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN" \
-  --env "TELEGRAM_CHAT_ID=$TELEGRAM_CHAT_ID" \
-  --timeout 300
+  --profile orchestrator
 ```
 
-## Coder — polls every minute
+## Coder — registers via H2
 
-```
-hermes -p coder cron add \
+```bash
+hermes cron add '* * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll-prompts/coder-tick.md)" \
   --name "max-agency-coder-tick" \
-  --schedule "* * * * *" \
-  --prompt-file "$MAX_AGENCY_CACHE/hermes-config/poll-prompts/coder-tick.md" \
-  --env "PROJECT_REPO=$PROJECT_REPO" \
-  --timeout 1500
+  --profile coder
 ```
 
-## Environment variables expected
+## PROJECT_REPO env var
 
-| Var | Purpose |
-|---|---|
-| `MAX_AGENCY_CACHE` | Local path to the cloned public repo (default: `~/.hermes-cache/Max_Agency`) |
-| `PROJECT_REPO` | The project repo to operate on, e.g. `Wagner-Maximiliano/my-project` |
-| `TELEGRAM_BOT_TOKEN` | Optional; for Orchestrator escalations |
-| `TELEGRAM_CHAT_ID` | Optional; for Orchestrator escalations |
+H2 writes `PROJECT_REPO=<value>` to `~/.hermes/.env`. Hermes loads this file at startup, making it available to all cron ticks.
 
-These should be exported in the same shell that runs H2, or persisted via `hermes env set` per profile.
+To update for a new project: re-run H2 with the new repo slug.
 
 ## Inspecting / removing
 
-```
+```bash
+# List jobs per profile
 hermes -p orchestrator cron list
-hermes -p orchestrator cron remove max-agency-orchestrator-tick
 hermes -p coder cron list
-hermes -p coder cron remove max-agency-coder-tick
+
+# Remove by job ID (hex from cron list output)
+hermes cron remove <job_id>
 ```
 
 ## Notes
 
-- The `--prompt-file` flag is shown as the conventional way to feed a long prompt to a cron tick. If your Hermes version expects `--prompt` with inline text, the bootstrap prompt H2 reads the file and inlines it instead.
-- `--timeout` is in seconds. Orchestrator ticks are short (5 min cap). Coder ticks may take up to 25 min (one full implementation cycle).
+- H2 handles "remove if already exists" automatically before re-adding.
+- The `--profile` flag on `cron add` is different from `hermes -p PROFILE cron list`. Both work correctly.
+- Telegram vars (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_HOME_CHANNEL`) are already in `~/.hermes/.env` from Hermes setup — no extra action needed.

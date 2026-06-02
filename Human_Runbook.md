@@ -159,49 +159,105 @@ Edit the first line, then paste. Use the GitHub `owner/repo` slug — not a URL,
 ```
 PROJECT_REPO = Wagner-Maximiliano/REPLACE-WITH-YOUR-PROJECT-REPO
 
-You are continuing Max Agency bootstrap. H1 must have completed. Follow these steps. Print [OK] or [FAIL: <reason>] after each.
+You are continuing Max Agency bootstrap. H1 must have completed.
 
-CONSTANTS (use the PROJECT_REPO value from the first line of this message):
-- CACHE_DIR     = $HOME/.hermes-cache/Max_Agency
-- ORCH_PROMPT   = $CACHE_DIR/hermes-config/poll-prompts/orchestrator-tick.md
-- CODER_PROMPT  = $CACHE_DIR/hermes-config/poll-prompts/coder-tick.md
+Extract PROJECT_REPO from the first line (the part after "= "). Substitute it for __PROJECT_REPO__ on line 5 of the script below, then run the script exactly as written. Do not modify anything else.
 
-PROCEDURE:
+  python3 - <<'PY'
+import os, subprocess, sys, re
+from pathlib import Path
 
-1. Confirm PROJECT_REPO from the first line. Print its value. If it is still "REPLACE-WITH-YOUR-PROJECT-REPO", emit FAIL and abort.
+PROJECT_REPO = '__PROJECT_REPO__'
+HOME         = Path.home()
+CACHE_DIR    = HOME / '.hermes-cache' / 'Max_Agency'
+ORCH_PROMPT  = CACHE_DIR / 'hermes-config' / 'poll-prompts' / 'orchestrator-tick.md'
+CODER_PROMPT = CACHE_DIR / 'hermes-config' / 'poll-prompts' / 'coder-tick.md'
+ORCH_NAME    = 'max-agency-orchestrator-tick'
+CODER_NAME   = 'max-agency-coder-tick'
+ENV_PATH     = HOME / '.hermes' / '.env'
 
-2. Verify both prompt files exist. If either is missing, emit FAIL and abort.
+def fail(step, reason):
+    print(f'[{step} FAIL: {reason}]')
+    print('BOOTSTRAP_H2_ABORT')
+    sys.exit(0)
 
-3. Register the orchestrator cron job:
-   hermes -p orchestrator cron add \
-     --name "max-agency-orchestrator-tick" \
-     --schedule "* * * * *" \
-     --prompt-file "$ORCH_PROMPT" \
-     --env "PROJECT_REPO=$PROJECT_REPO" \
-     --env "MAX_AGENCY_CACHE=$CACHE_DIR" \
-     --env "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}" \
-     --env "TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}" \
-     --timeout 300
-   If --prompt-file is unsupported, read the file and pass contents via --prompt.
+def run(cmd):
+    p = subprocess.run(cmd, text=True, capture_output=True)
+    return p.returncode, p.stdout, p.stderr
 
-4. Register the coder cron job:
-   hermes -p coder cron add \
-     --name "max-agency-coder-tick" \
-     --schedule "* * * * *" \
-     --prompt-file "$CODER_PROMPT" \
-     --env "PROJECT_REPO=$PROJECT_REPO" \
-     --env "MAX_AGENCY_CACHE=$CACHE_DIR" \
-     --timeout 1500
-   Same --prompt fallback if needed.
+def find_job_id(profile, name):
+    _, out, _ = run(['hermes', '-p', profile, 'cron', 'list', '--all'])
+    current_id = None
+    for line in out.splitlines():
+        m = re.match(r'\s+([0-9a-f]{10,16})\s+\[', line)
+        if m:
+            current_id = m.group(1)
+        n = re.match(r'\s+Name:\s+(.+)', line)
+        if n and n.group(1).strip() == name and current_id:
+            return current_id
+    return None
 
-5. Run `hermes -p orchestrator cron list` and `hermes -p coder cron list`. Confirm each shows exactly one job and print the PROJECT_REPO baked into each.
+# Step 1
+if PROJECT_REPO in ('REPLACE-WITH-YOUR-PROJECT-REPO', '__PROJECT_REPO__', ''):
+    fail(1, 'PROJECT_REPO is still the placeholder — edit the first line')
+print(f'[1 OK: PROJECT_REPO={PROJECT_REPO}]')
+
+# Step 2
+if not ORCH_PROMPT.is_file():
+    fail(2, f'missing {ORCH_PROMPT} — re-run H1')
+if not CODER_PROMPT.is_file():
+    fail(2, f'missing {CODER_PROMPT} — re-run H1')
+print('[2 OK]')
+
+# Step 3: Bake PROJECT_REPO into ~/.hermes/.env
+if ENV_PATH.exists():
+    content = ENV_PATH.read_text(encoding='utf-8')
+    content = re.sub(r'^PROJECT_REPO=.*\n?', '', content, flags=re.MULTILINE)
+    content = content.rstrip('\n') + f'\nPROJECT_REPO={PROJECT_REPO}\n'
+    ENV_PATH.write_text(content, encoding='utf-8')
+else:
+    ENV_PATH.write_text(f'PROJECT_REPO={PROJECT_REPO}\n', encoding='utf-8')
+print(f'[3 OK: PROJECT_REPO written to {ENV_PATH}]')
+
+# Step 4: Register orchestrator cron (replace if already exists)
+job_id = find_job_id('orchestrator', ORCH_NAME)
+if job_id:
+    run(['hermes', 'cron', 'remove', job_id])
+rc, out, err = run(['hermes', 'cron', 'add', '* * * * *',
+                    ORCH_PROMPT.read_text(encoding='utf-8'),
+                    '--name', ORCH_NAME, '--profile', 'orchestrator'])
+if rc != 0:
+    fail(4, (out + err).strip() or 'hermes cron add failed for orchestrator')
+print('[4 OK: orchestrator cron registered]')
+
+# Step 5: Register coder cron (replace if already exists)
+job_id = find_job_id('coder', CODER_NAME)
+if job_id:
+    run(['hermes', 'cron', 'remove', job_id])
+rc, out, err = run(['hermes', 'cron', 'add', '* * * * *',
+                    CODER_PROMPT.read_text(encoding='utf-8'),
+                    '--name', CODER_NAME, '--profile', 'coder'])
+if rc != 0:
+    fail(5, (out + err).strip() or 'hermes cron add failed for coder')
+print('[5 OK: coder cron registered]')
+
+# Step 6: Verify
+_, orch_list, _ = run(['hermes', '-p', 'orchestrator', 'cron', 'list'])
+_, coder_list, _ = run(['hermes', '-p', 'coder', 'cron', 'list'])
+if ORCH_NAME not in orch_list:
+    fail(6, f'{ORCH_NAME} not found in orchestrator cron list')
+if CODER_NAME not in coder_list:
+    fail(6, f'{CODER_NAME} not found in coder cron list')
+if f'PROJECT_REPO={PROJECT_REPO}' not in ENV_PATH.read_text(encoding='utf-8'):
+    fail(6, 'PROJECT_REPO not confirmed in ~/.hermes/.env')
+print(f'[6 OK: both cron jobs active; PROJECT_REPO={PROJECT_REPO} in .env]')
+print('BOOTSTRAP_H2_COMPLETE')
+PY
 
 OUTPUT CONTRACT:
-- One [OK] / [FAIL: …] line per step.
-- Final line MUST be: BOOTSTRAP_H2_COMPLETE
-- On any failure, emit BOOTSTRAP_H2_ABORT and stop.
-
-STOP after step 5.
+- Print script output verbatim.
+- Final line MUST be BOOTSTRAP_H2_COMPLETE (all steps pass) or BOOTSTRAP_H2_ABORT (any fail).
+- STOP immediately after the script exits.
 ```
 
 ### H3 (verify setup)
@@ -218,7 +274,7 @@ CHECKS:
 5. `cat $HOME/.hermes/profiles/coder/SOUL.md` starts with "# Coder (Hermes side) — Soul".
 6. `ls $HOME/.hermes/profiles/orchestrator/skills/ | wc -l` is at least 1.
 7. `ls $HOME/.hermes/profiles/coder/skills/ | wc -l` is at least 1.
-8. The orchestrator cron job env has a non-empty, non-placeholder PROJECT_REPO. Print the value.
+8. `grep PROJECT_REPO ~/.hermes/.env` returns a non-empty, non-placeholder value. Print the value.
 
 OUTPUT CONTRACT:
 - 8 lines: "CHECK <n>: PASS" or "CHECK <n>: FAIL — <reason>".
@@ -250,11 +306,13 @@ Begin your workflow. Ask up to 5 clarifying questions in one batched message, th
 Unregister-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine" -Confirm:$false
 ```
 
-**Hermes cron jobs** (WSL):
+**Hermes cron jobs** (WSL — get IDs from `hermes -p orchestrator cron list` and `hermes -p coder cron list`):
 
 ```bash
-hermes -p orchestrator cron remove max-agency-orchestrator-tick
-hermes -p coder cron remove max-agency-coder-tick
+hermes -p orchestrator cron list   # note the hex job ID next to max-agency-orchestrator-tick
+hermes cron remove <orchestrator-job-id>
+hermes -p coder cron list          # note the hex job ID next to max-agency-coder-tick
+hermes cron remove <coder-job-id>
 ```
 
 **Hermes profiles** (WSL — only if fully removing):
@@ -294,7 +352,7 @@ rm -rf ~/.hermes-cache/Max_Agency
 | Wrong project | Hermes: re-paste H2 with corrected repo. Windows: re-run `register-task.ps1`. |
 | Routine not picking up issues | Windows: `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine` → History. Ensure `claude` is on PATH. |
 | Both runtimes grab one issue | Issue has two `assigned:*` labels. Fix to one, re-add `ready`. |
-| OpenRouter rate limits | WSL: remove the cron job, re-add with `--schedule "*/5 * * * *"`. |
+| OpenRouter rate limits | WSL: get job ID from `hermes -p orchestrator cron list`, `hermes cron remove <id>`, re-run H2 (change `* * * * *` to `*/5 * * * *` in the prompt). |
 
 ---
 
