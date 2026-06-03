@@ -2,11 +2,12 @@
 # Installed to: ~/.hermes/profiles/coder/config.yaml
 
 model:
-  default: openrouter/openai/gpt-5-codex
-  provider: openrouter
+  base_url: https://chatgpt.com/backend-api/codex
+  default: gpt-5-codex
+  provider: openai-codex
 
 auxiliary:
-  compression: openrouter/openai/gpt-5-mini
+  compression: gpt-5-mini
 
 toolsets:
   - terminal

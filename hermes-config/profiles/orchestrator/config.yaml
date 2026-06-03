@@ -2,12 +2,13 @@
 # Installed to: ~/.hermes/profiles/orchestrator/config.yaml
 
 model:
-  default: openrouter/openai/gpt-5
-  provider: openrouter
+  base_url: https://chatgpt.com/backend-api/codex
+  default: gpt-5.4
+  provider: openai-codex
 
 # Auxiliary models (optional). Cheaper model used for compression/summary tasks.
 auxiliary:
-  compression: openrouter/openai/gpt-5-mini
+  compression: gpt-5-mini
 
 toolsets:
   - terminal
