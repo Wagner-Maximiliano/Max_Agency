@@ -14,7 +14,7 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
 
 2. **Pull latest state.** `cd` into the local clone of `$PROJECT_REPO` (path: `~/.hermes-cache/$PROJECT_REPO`). If it does not exist, clone it. Run `git pull --rebase`.
 
-3. **Regenerate state.** Run `powershell.exe scripts/rebuild-state.ps1 -Repo $PROJECT_REPO`. Commit `State.md` if it changed.
+3. **Regenerate state (best-effort).** Try `powershell.exe scripts/rebuild-state.ps1 -Repo $PROJECT_REPO 2>&1 || echo "rebuild-state skipped (powershell unavailable)"`. If it succeeds and `State.md` changed, `git add State.md && git commit -m "state: refresh snapshot" && git push`. If it fails (no powershell, script missing, etc.), warn once via comment on the kickoff issue then continue — do NOT exit with TICK_FAIL. Subsequent steps do not depend on State.md.
 
 4. **Handle kickoff issues.** Run:
    ```
@@ -34,11 +34,20 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
       )" \
         --label "phase:<X>" \
         --label "assigned:<model-label>" \
+        --label "role:<role-label>" \
         --label "backlog"
       ```
-      Use the Model Roster in the kickoff issue body to map each task to the correct `assigned:*` label. Tasks with no unmet dependencies get `ready` instead of `backlog`.
+      Apply BOTH labels on every task:
+      - **`assigned:<model>`** — from the Model Roster table in the kickoff issue body (e.g. `assigned:hermes-coder`, `assigned:claude-haiku`, `assigned:claude-sonnet`, `assigned:claude-opus`).
+      - **`role:<role>`** — derived from the task type. Use these rules in order:
+        1. Title or description contains "CTO review" / "verdict" / "sign-off" → `role:cto`
+        2. Title or description contains "PLAN revision" / "ADR judgment" / "scope" / "architect" → `role:architect`
+        3. Otherwise → `role:coder`
+      Tasks with no unmet dependencies get `ready` instead of `backlog`.
    c. Post a comment on the kickoff issue listing all created issue numbers.
    d. Remove the `kickoff` label and add `planned`.
+
+   **Idempotency:** Before creating any issue, search for existing issues with the same `phase:N/task-id` prefix in their title (`gh issue list --search "<phase>/<task-id>:" --state all`). If one already exists, SKIP creation for that task — never duplicate.
 
 5. **Promote ready tasks.** Run:
    ```
@@ -82,7 +91,9 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
 
 ## Hard stop conditions
 
-- If any `gh` or `git` command returns a permission error → emit `TICK_FAIL auth` and exit.
+- If any `gh` command returns a permission error (NOT a "no results" empty list) → emit `TICK_FAIL auth` and exit.
+- If `git` fails on push/pull → log and continue if possible; only exit if the local clone is unusable.
+- **Do NOT exit on step 3 (rebuild-state) failure** — it's best-effort.
 - If wall-clock exceeds 5 minutes → commit any WIP, emit `TICK_TIMEOUT`, exit. Exception: step 4 (kickoff) may take up to 3 minutes on its own — it runs first so the remaining budget still applies to steps 5-11.
 - Never run more than one tick concurrently. Hermes cron handles this via `MultipleInstances=IgnoreNew` semantics; do not work around it.
 

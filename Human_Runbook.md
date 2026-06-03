@@ -28,6 +28,22 @@ An autonomous multi-agent dev team coordinated through GitHub. You paste prompts
 
 `Highlevel_Plan_V2.0.md` · `CODING_STANDARDS.md` · `docs/MDP.md` · `docs/AMA.md` · `skills/`
 
+## Label scheme (canonical)
+
+Every project issue carries four label groups. Pollers find work by intersecting all four.
+
+| Group | Values | Owner |
+|---|---|---|
+| `assigned:<model>` | `hermes-coder`, `claude-haiku`, `claude-sonnet`, `claude-opus` | PLAN.md Model Roster decides |
+| `role:<role>` | `architect`, `cto`, `coder` | Orchestrator infers from task title at kickoff |
+| `phase:<N>` | `phase:0` through `phase:7` | From PLAN.md |
+| State | `backlog` → `ready` → `in-progress` → `review` (plus `blocked`, `kickoff`, `planned`) | Orchestrator manages transitions |
+
+**Hermes coder** polls `in-progress + assigned:hermes-coder + role:coder`.
+**Claude Code routine** polls `in-progress + assigned:claude-*` and reads `role:*` to load the right agent file (`agents/architect.md`, `agents/cto.md`, or `agents/coder.md`).
+
+There are **no separate CTO/Architect routines**. One Claude Code routine handles all three roles, switching behavior based on the issue's `role:*` label. Hermes only ever runs as coder.
+
 ---
 
 # Instructions
@@ -365,6 +381,11 @@ rm -rf ~/.hermes-cache/Max_Agency
 | Routine not picking up issues | Windows: `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine` → History. Verify `claude --version` and `gh auth status` both work. |
 | `register-task.ps1` fails with "positional parameter... GitHub" | PowerShell 5.1 encoding bug — the `.ps1` file has a non-ASCII character (em-dash). Re-pull the latest agency repo: `git pull`. |
 | Both runtimes grab one issue | Issue has two `assigned:*` labels. Fix to one, re-add `ready`. |
+| Hermes coder firing every minute but never picks work | Check the issue has all three: `in-progress` + `assigned:hermes-coder` + `role:coder`. Coder only handles `role:coder`. |
+| Claude Code routine logs `NO_WORK` even with open issues | Issue must have `assigned:claude-*` (haiku/sonnet/opus) AND a `role:*` label. Architect/CTO tasks need `role:architect`/`role:cto`. |
+| Orchestrator logs `TICK_FAIL step:missing-rebuild-state` | `powershell.exe` is unavailable in the WSL sandbox. The step is now best-effort and non-fatal — but if you see it repeatedly, run `scripts/rebuild-state.ps1` manually from Windows PowerShell occasionally to refresh State.md. |
+| Orchestrator logs `NO_REPO` | `~/.hermes/.env` missing `PROJECT_REPO=...`. WSL: `cat ~/.hermes/.env`, add the line if missing, then `systemctl --user restart hermes-orchestrator-tick.timer`. |
+| Phase task issues never appear after kickoff | Issue #2 (or your kickoff issue) has the `kickoff` label removed but no child issues exist — the orchestrator's step 4 failed silently. Re-add the `kickoff` label and watch the next tick; idempotency check prevents duplicates. |
 | OpenRouter rate limits | WSL: get job ID from `hermes -p orchestrator cron list`, `hermes cron remove <id>`, re-run H2 (change `* * * * *` to `*/5 * * * *` in the prompt). |
 
 ---

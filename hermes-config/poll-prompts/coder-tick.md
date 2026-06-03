@@ -14,9 +14,11 @@ Repo: read `PROJECT_REPO` env var. If unset, exit `NO_REPO`.
 
 2. **Find one issue to claim.** Run:
    ```
-   gh issue list --repo $PROJECT_REPO --label "in-progress" --label "assigned:hermes-coder" --state open --json number,title,labels,assignees --limit 20
+   gh issue list --repo $PROJECT_REPO --label "in-progress" --label "assigned:hermes-coder" --label "role:coder" --state open --json number,title,labels,assignees --limit 20
    ```
    Filter out any with non-empty `assignees` (already claimed). Sort by issue number ascending. If none: print `<UTC timestamp> | NO_WORK` and exit.
+
+   Note: Hermes coder ONLY handles `role:coder` issues. CTO and Architect work is dispatched to Claude Code, not Hermes.
 
 3. **Claim it.** Pick the lowest. Run:
    ```
