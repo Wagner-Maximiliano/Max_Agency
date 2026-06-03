@@ -24,6 +24,13 @@ Every dispatched issue carries:
 
 Claude Code only ever picks up issues with `assigned:claude-*`. Hermes coder only picks up `assigned:hermes-coder` + `role:coder`.
 
+## Working directories (canonical)
+
+- **Agency repo** (this prompt + role files + docs + skills): `C:\Users\lobster\Github_Projects\Max_Agency` — the directory you started in. READ-ONLY for role/docs/skills lookups.
+- **Project repo** (where you DO the work): `$env:USERPROFILE\.hermes-cache\$env:PROJECT_REPO` (e.g. `C:\Users\lobster\.hermes-cache\Wagner-Maximiliano\Surviving_The_AI_World`). All commits, worktrees, file edits happen here.
+
+Every coder tick MUST `cd` into the project repo before any git/file work. If the project repo dir does not exist, run `gh repo clone $env:PROJECT_REPO $env:USERPROFILE\.hermes-cache\$env:PROJECT_REPO` first.
+
 ## Procedure (follow exactly, in order)
 
 1. **Discover**. Run three queries in parallel and merge results:
@@ -34,15 +41,16 @@ Claude Code only ever picks up issues with `assigned:claude-*`. Hermes coder onl
    ```
 2. **Filter**. Drop any issue with a non-empty `assignees` list (already claimed). Drop any without a `role:*` label.
 3. **Pick one**. Lowest issue number wins. If none, exit cleanly with message `NO_WORK`.
-4. **Claim**. Assign the issue to yourself: `gh issue edit <N> --add-assignee @me`.
-5. **Load role**. Read the `agents/<role>.md` file matching the `role:*` label on the issue.
-6. **Read laws**. Read everything under `docs/`. These are your Laws, Policies, Protocols, and Rules. Comply.
-7. **Read skills**. Scan `skills/` frontmatter. Load every body whose `applies_to` includes your role and whose `when_to_use` matches the issue.
-8. **Work**. Follow the role's system prompt for one full cycle:
-   - Architect: produce/revise `PLAN.md`, submit to CTO via issue comment
-   - CTO: review the artifact named in the issue, post verdict comment
-   - Coder: create worktree at `worktrees/claude-code/<N>-<slug>/`, work, open PR, move issue to `review`
-9. **Exit**. Write a one-line status to `.claude-routine.log` with timestamp, issue number, action taken. Exit.
+4. **Claim**. Assign the issue to yourself: `gh issue edit <N> --repo $env:PROJECT_REPO --add-assignee @me`.
+5. **Load role**. Read the `agents/<role>.md` file from the AGENCY repo (your starting directory) matching the `role:*` label on the issue.
+6. **Read laws**. Read everything under `docs/` in the agency repo. These are your Laws, Policies, Protocols, and Rules. Comply.
+7. **Read skills**. Scan agency `skills/` frontmatter. Load every body whose `applies_to` includes your role and whose `when_to_use` matches the issue.
+8. **Switch to the project repo.** `cd $env:USERPROFILE\.hermes-cache\$env:PROJECT_REPO` (clone first if missing). Run `git fetch --all --prune && git checkout main && git pull --rebase`.
+9. **Work.** Follow the role's system prompt for one full cycle:
+   - **Architect**: edit `PLAN.md` in the project repo on a branch `architect/<N>-<slug>`, commit, push, open PR, submit to CTO via issue comment.
+   - **CTO**: read `gh pr diff <PR-N> --repo $env:PROJECT_REPO` for the PR referenced in the issue body. Verify against the linked task issue's AC. Post a single comment on THIS CTO review issue starting with `VERDICT: APPROVED` / `VERDICT: CHANGES REQUIRED` / `VERDICT: ESCALATE` followed by checklist or change list. Close this CTO review issue after posting. **Do not merge.**
+   - **Coder**: create branch `phase-<n>/<N>-<slug>` directly in the project repo clone (not a worktree — Windows worktrees add complexity; one branch per tick is enough). Edit files, commit incrementally with `phase-<n>/<N>: <subject>`, push, open PR with `Closes #<N>` in the body, move the task issue to `review` label.
+10. **Exit**. Print one-line status (see Output below) and exit.
 
 ## Hard rules
 
