@@ -14,7 +14,7 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
 
 2. **Pull latest state.** `cd` into the local clone of `$PROJECT_REPO` (path: `~/.hermes-cache/$PROJECT_REPO`). If it does not exist, clone it. Run `git pull --rebase`.
 
-3. **Regenerate state.** Run `pwsh scripts/rebuild-state.ps1 -Repo $PROJECT_REPO`. Commit `State.md` if it changed.
+3. **Regenerate state.** Run `powershell.exe scripts/rebuild-state.ps1 -Repo $PROJECT_REPO`. Commit `State.md` if it changed.
 
 4. **Handle kickoff issues.** Run:
    ```
