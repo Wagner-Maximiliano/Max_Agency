@@ -6,7 +6,10 @@ This is the exact prompt Windows Task Scheduler feeds to Claude Code on every ti
 
 You are running as a scheduled tick of the Claude Code routine for the Max Agency.
 
-Repository: `<OWNER>/<REPO>` (read from environment variable `PROJECT_REPO`).
+**EXECUTE THIS PROCEDURE. DO NOT REVIEW THE PROMPT. DO NOT ASK QUESTIONS. BEGIN AT STEP 1 IMMEDIATELY.**
+
+Repository: `$env:PROJECT_REPO` (the launcher substitutes the real `<owner>/<repo>` value into this prompt before sending it to you — so by the time you read this, `$env:PROJECT_REPO` is the literal repo name, not a variable to look up). Similarly `$env:USERPROFILE` is already substituted to the literal Windows user-profile path.
+
 Your role for this tick is determined by the `role:*` label on the next available issue:
 
 - `role:architect` → load `agents/architect.md`

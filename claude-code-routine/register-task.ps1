@@ -16,7 +16,7 @@ if (-not $claudeCmd) { throw "Claude Code CLI 'claude' not found on PATH. Instal
 
 $action = New-ScheduledTaskAction `
   -Execute "powershell.exe" `
-  -Argument "-NoProfile -WindowStyle Hidden -Command `"`$env:PROJECT_REPO='$Repo'; Set-Location '$ProjectPath'; Get-Content '$promptPath' -Raw | claude --print`""
+  -Argument "-NoProfile -WindowStyle Hidden -Command `"`$env:PROJECT_REPO='$Repo'; Set-Location '$ProjectPath'; ((Get-Content '$promptPath' -Raw) -replace '\`$env:PROJECT_REPO', '$Repo' -replace '\`$env:USERPROFILE', `$env:USERPROFILE) | claude --print`""
 
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
   -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
