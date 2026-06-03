@@ -15,7 +15,7 @@ toolsets:
   - memory
 
 approval:
-  mode: smart
+  mode: auto
 
 session:
   compression_after_turns: 25
