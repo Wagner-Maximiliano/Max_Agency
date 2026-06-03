@@ -66,12 +66,54 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
 
 7. **Check progress.** For each `in-progress` issue, check the last commit time on its branch via `gh api repos/$PROJECT_REPO/branches/<branch>`. If older than 30 minutes, post a warning comment. If older than 60 minutes, add label `blocked` and escalate (see step 10).
 
-8. **Promote PRs to review.** For each open PR with no CTO verdict comment, ensure the linked issue has label `review`. Post a comment on the issue: `PR #<N> awaiting CTO review.`
+8. **Promote PRs to review + dispatch CTO review issue.** Run:
+   ```
+   gh pr list --repo $PROJECT_REPO --state open --json number,title,headRefName,body --limit 50
+   ```
+   For each PR:
+   a. Parse the linked issue number from the PR body (look for `Closes #<N>` or `Fixes #<N>`).
+   b. Ensure the linked issue has label `review` (remove `in-progress` if present).
+   c. Post a one-line comment on the linked issue (only if not already posted): `PR #<N> awaiting CTO review.`
+   d. **Idempotency check:** search for an existing CTO review issue:
+      ```
+      gh issue list --repo $PROJECT_REPO --search "CTO review: PR #<N>" --state all --json number --jq '.[].number'
+      ```
+      If one already exists (open OR closed), SKIP creating another — never duplicate. Move on to the next PR.
+   e. If no CTO review issue exists, create one:
+      ```
+      gh issue create --repo $PROJECT_REPO \
+        --title "CTO review: PR #<N> (<original-title-truncated-80-chars>)" \
+        --body "$(cat <<EOF
+      Review PR #<N> against the acceptance criteria of the linked task issue and the Plan Acceptance Checklist in your role file (\`agents/cto.md\`).
 
-9. **Handle CTO verdicts.** For each PR with a recent comment matching `VERDICT: APPROVED` / `CHANGES REQUIRED` / `ESCALATE`:
-   - `APPROVED` → escalate to human via Telegram with merge request (see step 10).
-   - `CHANGES REQUIRED` → post the verdict as a comment on the linked issue, replace `review` with `in-progress`.
-   - `ESCALATE` → escalate to human (step 10).
+      **Linked task issue:** #<original-issue-number>
+      **PR branch:** \`<head-ref-name>\`
+      **PR URL:** <pr-url>
+
+      Read the PR diff (\`gh pr diff <N>\`), the linked issue body, and any \`needs-adr: true\` decisions. Then post a single comment that begins with one of:
+
+      - \`VERDICT: APPROVED\` — followed by a checklist showing every AC verified.
+      - \`VERDICT: CHANGES REQUIRED\` — followed by a numbered list of changes, in AMA §5.1 format.
+      - \`VERDICT: ESCALATE\` — followed by the ambiguity that needs the human or Architect.
+
+      Do NOT merge the PR — only the human merges. Do NOT push commits to the branch.
+
+      Close this issue after posting your verdict comment.
+      EOF
+      )" \
+        --label "phase:<X>" \
+        --label "assigned:claude-opus" \
+        --label "role:cto" \
+        --label "in-progress"
+      ```
+      Use `assigned:claude-opus` (per PLAN.md model roster — CTO sign-offs are gates → opus). Use the same `phase:<X>` label as the original task issue. Status starts at `in-progress` (not `ready`) so the next Claude Code tick picks it up immediately.
+
+9. **Handle CTO verdicts.** For each CTO review issue (`role:cto`) with a `VERDICT:` comment by the CTO assignee:
+   - `VERDICT: APPROVED` → escalate to human via Telegram with merge request (step 10). Close the CTO review issue. Leave the linked task issue at `review` until human merges; on merge, the linked task issue auto-closes via `Closes #<N>` in the PR body.
+   - `VERDICT: CHANGES REQUIRED` → on the LINKED TASK ISSUE (not the CTO review issue): post the verdict comment body verbatim, remove `review`, add `in-progress`, clear assignee so the coder picks it up again. Close the CTO review issue.
+   - `VERDICT: ESCALATE` → escalate to human (step 10). Close the CTO review issue.
+
+   If no `VERDICT:` comment exists on a `role:cto` issue and it's been open >60 minutes since creation, post a warning comment and escalate (step 10). The CTO hasn't been picked up — likely a Claude Code routine outage.
 
 10. **Escalate.** If `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set in env, POST a message to the Telegram API in this exact format:
     ```
