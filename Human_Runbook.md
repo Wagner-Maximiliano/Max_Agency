@@ -44,6 +44,32 @@ Every project issue carries four label groups. Pollers find work by intersecting
 
 There are **no separate CTO/Architect routines**. One Claude Code routine handles all three roles, switching behavior based on the issue's `role:*` label. Hermes only ever runs as coder.
 
+**Model-per-label enforcement:** the Claude Code routine is launched by `run-tick.ps1`, which peeks the queue, reads the next claimable issue's `assigned:claude-<model>` label, and starts Claude with the matching `--model` (`haiku`/`sonnet`/`opus`). This makes the PLAN.md cost roster real, not cosmetic.
+
+## How a task flows (the lifecycle)
+
+Every unit of work is a GitHub issue that walks through labelled states. The Orchestrator moves it left-to-right; coders and the CTO do the work at each stage.
+
+```
+kickoff ─▶ backlog ─▶ ready ─▶ in-progress ─▶ review ─▶ (human merge) ─▶ closed
+   │          │          │           │            │
+ Architect  deps      deps        a coder       a CTO
+ PLAN.md    pending   cleared     claims it,     reviews the PR,
+ parsed                           opens a PR     posts VERDICT
+```
+
+1. **kickoff** — the approved `PLAN.md` is parsed; one issue per task is created (`backlog` or `ready`), each tagged `assigned:<model>` + `role:<role>` + `phase:<N>`.
+2. **backlog → ready** — when an issue's `Depends-on:` issues are all closed, the Orchestrator promotes it.
+3. **ready → in-progress** — the Orchestrator dispatches it (posts a comment, flips the label). Now a coder can see it.
+4. **a coder claims it** — adds itself as assignee, makes a branch, commits, opens a PR (`Closes #N`), flips the issue to `review`.
+5. **CTO review** — the Orchestrator opens a dedicated `role:cto` issue pointing at the PR. The CTO reads the diff + CI, posts `VERDICT: APPROVED | CHANGES REQUIRED | ESCALATE` as the first line.
+6. **routing** — `APPROVED` → Orchestrator asks you (the human) to merge. `CHANGES REQUIRED` → the task bounces back to `in-progress` for the coder. `ESCALATE` → it comes to you.
+7. **human merge → closed** — you merge the PR; the Orchestrator closes the task issue.
+
+**Safety gates that never move without a human:** only you merge PRs, and the CTO is always a *different* agent instance than the coder it reviews.
+
+> 📘 **New to all this?** Read `docs/How_Max_Agency_Works.pdf` — a fully illustrated, plain-language walkthrough of everything below.
+
 ---
 
 # Instructions
@@ -387,6 +413,13 @@ rm -rf ~/.hermes-cache/Max_Agency
 | Orchestrator logs `NO_REPO` | `~/.hermes/.env` missing `PROJECT_REPO=...`. WSL: `cat ~/.hermes/.env`, add the line if missing, then `systemctl --user restart hermes-orchestrator-tick.timer`. |
 | Phase task issues never appear after kickoff | Issue #2 (or your kickoff issue) has the `kickoff` label removed but no child issues exist — the orchestrator's step 4 failed silently. Re-add the `kickoff` label and watch the next tick; idempotency check prevents duplicates. |
 | OpenRouter rate limits | WSL: get job ID from `hermes -p orchestrator cron list`, `hermes cron remove <id>`, re-run H2 (change `* * * * *` to `*/5 * * * *` in the prompt). |
+| Claude Code routine fails with `401 Invalid authentication credentials` | The Claude Code OAuth token expired (~30-day life). Run `claude /login` in a PowerShell window, sign in, done. The scheduled task picks up the fresh token next tick. |
+| Claude Code routine "succeeds" (result 0) but does no work | The routine asked for `gh` permission it couldn't get headlessly. Confirm `.claude/settings.json` exists in the agency repo with the `gh`/`git` allowlist (it ships in the repo — `git pull` if missing). |
+| Hermes ticks all log `HTTP 429: usage limit reached` | The ChatGPT-Codex backend (model `gpt-5.4`) shares your ChatGPT account quota. Wait for the window to reset (a few hours), or switch the profile to an API-billed model. Not a code fault. |
+| Hermes ticks log `gpt-5-codex not supported when using Codex with a ChatGPT account` | Wrong model ID. Edit `~/.hermes/profiles/<profile>/config.yaml` → `default: gpt-5.4`, then `systemctl --user restart hermes-<profile>-tick.timer`. |
+| Issue stuck `in-progress` with an assignee but nobody working it | A coder claimed it then died mid-tick (every agent auths as the same GitHub user, so the assignee is a phantom). The Orchestrator's reclaim step clears it automatically within ~60 min; to unstick now, `gh issue edit <N> --remove-assignee <user> --remove-label blocked`. |
+| Merged PR but its issue stayed open | GitHub's `Closes #N` auto-close is unreliable. The Orchestrator's step 7.5 closes it on the next tick; or close it by hand. |
+| Profile cron jobs never execute (gateway ignores them) | On this machine, Hermes profile-cron isn't auto-run by the gateway — we use **systemd user timers** instead (`hermes-orchestrator-tick.timer`, `hermes-coder-tick.timer`). Check `systemctl --user list-timers`. |
 
 ---
 
