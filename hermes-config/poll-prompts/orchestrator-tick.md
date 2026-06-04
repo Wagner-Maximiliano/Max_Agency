@@ -82,9 +82,12 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
    c. Post a one-line comment on the linked issue (only if not already posted): `PR #<N> awaiting CTO review.`
    d. **Idempotency check:** search for an existing CTO review issue:
       ```
-      gh issue list --repo $PROJECT_REPO --search "CTO review: PR #<N>" --state all --json number --jq '.[].number'
+      gh issue list --repo $PROJECT_REPO --search "CTO review: PR #<N> in:title" --state all --json number,state,comments
       ```
-      If one already exists (open OR closed), SKIP creating another — never duplicate. Move on to the next PR.
+      - If an **OPEN** one exists → SKIP (review in flight).
+      - If a **CLOSED** one exists **and** it carries a `VERDICT:` comment **or** the PR is already merged → SKIP (already reviewed/handled).
+      - If a **CLOSED** one exists with **no** `VERDICT:` comment and the PR is still open/unmerged → the prior review died without routing. **Re-create** a fresh CTO review issue (the old closed one is abandoned). This prevents a PR being stranded by a review tick that closed without a verdict.
+      - If none exists → create one.
    e. If no CTO review issue exists, create one:
       ```
       gh issue create --repo $PROJECT_REPO \
