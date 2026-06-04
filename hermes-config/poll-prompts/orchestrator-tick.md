@@ -72,6 +72,12 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
 
    c. **Branch exists with a recent commit or an open PR.** Healthy — leave it alone.
 
+7.5. **Close task issues whose PR merged.** GitHub's `Closes #<N>` keyword auto-close is unreliable (squash merges + force-pushed branches can silently fail to register it). Do not rely on it. Run:
+   ```
+   gh pr list --repo $PROJECT_REPO --state merged --json number,body,mergedAt --limit 30
+   ```
+   For each merged PR, parse its linked task issue (`Closes #<M>` / `Fixes #<M>`). If issue #<M> is still OPEN, close it explicitly: `gh issue close <M> --repo $PROJECT_REPO --reason completed --comment "Closed by orchestrator: PR #<N> merged."` and remove the `review`/`in-progress` labels. This guarantees the lifecycle terminates even when GitHub's auto-close misses.
+
 8. **Promote PRs to review + dispatch CTO review issue.** Run:
    ```
    gh pr list --repo $PROJECT_REPO --state open --json number,title,headRefName,body --limit 50
