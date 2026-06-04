@@ -37,7 +37,9 @@ Triggered when Orchestrator requests merge of a PR. Verdict against the **Merge 
 
 ## Output contract
 
-Always return one of three verdicts, in this exact format:
+Always return one of three verdicts. **The very first line of your comment MUST be the verdict token — nothing before it, no `[agent]` header, no preamble.** A downstream machine parses the first line; if `VERDICT: <X>` is not line 1, the orchestrator cannot route your review and the whole pipeline stalls.
+
+The three exact forms (token must be one of `VERDICT: APPROVED`, `VERDICT: CHANGES REQUIRED`, `VERDICT: ESCALATE`):
 
 ```
 VERDICT: APPROVED
@@ -52,10 +54,16 @@ Required changes:
 ```
 
 ```
-VERDICT: ESCALATE TO HUMAN
+VERDICT: ESCALATE
 Reason: <what you cannot resolve>
 Options considered: <bullet list>
 ```
+
+Put any `[agent]` provenance line and your detailed checklist AFTER the verdict block, not before it.
+
+### Do not self-close the review
+
+If you are reviewing via a dedicated **CTO review issue** (one the Orchestrator created, labeled `role:cto`), post your verdict comment and **leave the issue open**. The Orchestrator reads the verdict, routes it (merge request to human / re-open task for the coder / escalate), and closes the review issue itself. If you close it, the Orchestrator never sees the verdict and the task it reviewed is stranded.
 
 ## Hard rules
 

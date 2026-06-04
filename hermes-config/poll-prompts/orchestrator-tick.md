@@ -64,7 +64,13 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
    - Post a one-line comment on the issue: `Dispatched to <model>. Worktree: worktrees/<agent>/<N>-<slug>. <timestamp>`.
    - Replace `ready` with `in-progress`.
 
-7. **Check progress.** For each `in-progress` issue, check the last commit time on its branch via `gh api repos/$PROJECT_REPO/branches/<branch>`. If older than 30 minutes, post a warning comment. If older than 60 minutes, add label `blocked` and escalate (see step 10).
+7. **Check progress + reclaim stale assignments.** Run `gh issue list --repo $PROJECT_REPO --label "in-progress" --state open --json number,title,labels,assignees --limit 100`. For each `in-progress` issue:
+
+   a. **No-branch / no-PR + assigned = dead claim.** If the issue HAS an assignee but there is NO branch matching `phase-*/<N>-*` (check `gh api repos/$PROJECT_REPO/branches --jq '.[].name'`) AND no open PR linking it, then the coder tick that claimed it died before producing anything. **Reclaim it:** `gh issue edit <N> --remove-assignee <assignee> --remove-label blocked`. Keep `in-progress`. Post a comment: `Reclaimed: prior claim produced no branch within the tick. Re-dispatching.` This frees it for the next coder tick to pick up. (Because every agent authenticates as the same GitHub user, a non-empty assignee is the ONLY claim signal — so a claim with no work product after a full tick is always stale.)
+
+   b. **Branch exists but idle.** If a branch exists, check its last commit time via `gh api repos/$PROJECT_REPO/branches/<branch>`. If older than 30 minutes with no open PR, post a warning comment. If older than 60 minutes with no open PR, **reclaim** as in (a) — remove assignee, remove `blocked`, keep `in-progress`, comment `Reclaimed: branch idle >60m, no PR. Re-dispatching.` — so a fresh coder tick resumes from the branch. Escalate (step 10) only if the same issue has been reclaimed 3+ times (count prior `Reclaimed:` comments).
+
+   c. **Branch exists with a recent commit or an open PR.** Healthy — leave it alone.
 
 8. **Promote PRs to review + dispatch CTO review issue.** Run:
    ```
@@ -90,15 +96,13 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
       **PR branch:** \`<head-ref-name>\`
       **PR URL:** <pr-url>
 
-      Read the PR diff (\`gh pr diff <N>\`), the linked issue body, and any \`needs-adr: true\` decisions. Then post a single comment that begins with one of:
+      Read the PR diff (\`gh pr diff <N>\`), check CI (\`gh pr checks <N>\`), the linked issue body, and any \`needs-adr: true\` decisions. Then post a single comment whose VERY FIRST LINE is one of these literal tokens (nothing before it — no provenance header):
 
-      - \`VERDICT: APPROVED\` — followed by a checklist showing every AC verified.
-      - \`VERDICT: CHANGES REQUIRED\` — followed by a numbered list of changes, in AMA §5.1 format.
+      - \`VERDICT: APPROVED\` — followed by a checklist showing every AC verified. Only if CI is green.
+      - \`VERDICT: CHANGES REQUIRED\` — followed by a numbered list of changes, in AMA §5.1 format. A red/failing CI check is an automatic CHANGES REQUIRED.
       - \`VERDICT: ESCALATE\` — followed by the ambiguity that needs the human or Architect.
 
-      Do NOT merge the PR — only the human merges. Do NOT push commits to the branch.
-
-      Close this issue after posting your verdict comment.
+      Do NOT merge the PR — only the human merges. Do NOT push commits to the branch. Do NOT close this issue — the Orchestrator reads your verdict, routes it, and closes this issue itself.
       EOF
       )" \
         --label "phase:<X>" \
@@ -108,12 +112,12 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
       ```
       Use `assigned:claude-opus` (per PLAN.md model roster — CTO sign-offs are gates → opus). Use the same `phase:<X>` label as the original task issue. Status starts at `in-progress` (not `ready`) so the next Claude Code tick picks it up immediately.
 
-9. **Handle CTO verdicts.** For each CTO review issue (`role:cto`) with a `VERDICT:` comment by the CTO assignee:
-   - `VERDICT: APPROVED` → escalate to human via Telegram with merge request (step 10). Close the CTO review issue. Leave the linked task issue at `review` until human merges; on merge, the linked task issue auto-closes via `Closes #<N>` in the PR body.
-   - `VERDICT: CHANGES REQUIRED` → on the LINKED TASK ISSUE (not the CTO review issue): post the verdict comment body verbatim, remove `review`, add `in-progress`, clear assignee so the coder picks it up again. Close the CTO review issue.
-   - `VERDICT: ESCALATE` → escalate to human (step 10). Close the CTO review issue.
+9. **Handle CTO verdicts.** List open CTO review issues: `gh issue list --repo $PROJECT_REPO --label "role:cto" --state open --json number,body,comments`. For each, scan its comments for one whose text contains a line matching `VERDICT: APPROVED`, `VERDICT: CHANGES REQUIRED`, or `VERDICT: ESCALATE` (match the token anywhere in the comment, not only the first line — be tolerant of a stray provenance header, but prefer a first-line match). Parse the linked task issue number from the CTO review issue body (`Linked task issue: #<M>`). Then:
+   - `VERDICT: APPROVED` → escalate to human via Telegram with merge request (step 10). **Close the CTO review issue** (`gh issue close <cto-N> --comment "Routed: APPROVED, merge requested from human."`). Leave the linked task issue #<M> at `review` until the human merges; on merge it auto-closes via `Closes #<M>` in the PR body.
+   - `VERDICT: CHANGES REQUIRED` → on the LINKED TASK ISSUE #<M> (not the CTO review issue): post the verdict comment body verbatim, remove `review` and `blocked`, add `in-progress`, and clear its assignee (`gh issue edit <M> --remove-assignee <current-assignee>`) so a coder re-claims it. Then **close the CTO review issue**.
+   - `VERDICT: ESCALATE` → escalate to human (step 10). **Close the CTO review issue.**
 
-   If no `VERDICT:` comment exists on a `role:cto` issue and it's been open >60 minutes since creation, post a warning comment and escalate (step 10). The CTO hasn't been picked up — likely a Claude Code routine outage.
+   If a `role:cto` issue has NO parseable `VERDICT:` token in any comment AND has been open >60 minutes since creation, post one warning comment and escalate (step 10) — the CTO either hasn't been picked up (Claude Code outage) or forgot the token. Do NOT close it; it still needs a verdict.
 
 10. **Escalate.** If `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set in env, POST a message to the Telegram API in this exact format:
     ```

@@ -11,12 +11,17 @@ $ErrorActionPreference = "Stop"
 $promptPath = Join-Path $PSScriptRoot "poll-and-pickup.md"
 if (-not (Test-Path $promptPath)) { throw "poll-and-pickup.md not found at $promptPath" }
 
+$runTickPath = Join-Path $PSScriptRoot "run-tick.ps1"
+if (-not (Test-Path $runTickPath)) { throw "run-tick.ps1 not found at $runTickPath" }
+
 $claudeCmd = (Get-Command claude -ErrorAction SilentlyContinue)
 if (-not $claudeCmd) { throw "Claude Code CLI 'claude' not found on PATH. Install from https://claude.ai/download" }
 
+# Launch via run-tick.ps1, which peeks the queue, picks the model from the
+# issue's assigned:claude-<model> label, and runs `claude --model <m> --print`.
 $action = New-ScheduledTaskAction `
   -Execute "powershell.exe" `
-  -Argument "-NoProfile -WindowStyle Hidden -Command `"`$env:PROJECT_REPO='$Repo'; Set-Location '$ProjectPath'; ((Get-Content '$promptPath' -Raw) -replace '\`$env:PROJECT_REPO', '$Repo' -replace '\`$env:USERPROFILE', `$env:USERPROFILE) | claude --print`""
+  -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runTickPath`" -Repo `"$Repo`" -AgencyPath `"$ProjectPath`""
 
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
   -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
