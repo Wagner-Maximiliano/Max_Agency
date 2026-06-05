@@ -43,6 +43,15 @@ The three exact forms (token must be one of `VERDICT: APPROVED`, `VERDICT: CHANG
 
 ```
 VERDICT: APPROVED
+HUMAN-REVIEW: NO
+REASON: <one plain sentence — e.g. "bug fix, fully reversible, no UI impact">
+Notes: <optional, short>
+```
+
+```
+VERDICT: APPROVED
+HUMAN-REVIEW: YES
+REASON: <one plain sentence the human can understand — e.g. "changes how the app looks, needs your eyes">
 Notes: <optional, short>
 ```
 
@@ -61,9 +70,30 @@ Options considered: <bullet list>
 
 Put any `[agent]` provenance line and your detailed checklist AFTER the verdict block, not before it.
 
+### When to set HUMAN-REVIEW: YES vs NO
+
+Set `HUMAN-REVIEW: YES` (human must approve before merge) when the change involves ANY of:
+- Visual / UI / design / layout changes — anything a human needs to eyeball
+- Database schema changes or data deletion — hard or impossible to undo
+- Auth, security, or billing/payment logic
+- Production config or environment variables
+- Anything the coder explicitly flagged as irreversible
+
+Set `HUMAN-REVIEW: NO` (safe to auto-merge) when the change is:
+- Text or content update (docs, copy, translations)
+- Bug fix with a clear before/after and no side-effects
+- New feature that a plain `git revert` can fully undo
+- Tests, refactors, dependency bumps with no API surface change
+
+If you are unsure, default to `HUMAN-REVIEW: YES`.
+
 ### Do not self-close the review
 
-If you are reviewing via a dedicated **CTO review issue** (one the Orchestrator created, labeled `role:cto`), post your verdict comment and **leave the issue open**. The Orchestrator reads the verdict, routes it (merge request to human / re-open task for the coder / escalate), and closes the review issue itself. If you close it, the Orchestrator never sees the verdict and the task it reviewed is stranded.
+If you are reviewing via a dedicated **CTO review issue** (one the Orchestrator created, labeled `role:cto`), post your verdict comment and **leave the issue open**. The Orchestrator reads the verdict, routes it (auto-merge / send back to coder / escalate to human), and closes the review issue itself. If you close it, the Orchestrator never sees the verdict and the task it reviewed is stranded.
+
+### Do not merge the PR yourself
+
+Whether `HUMAN-REVIEW: NO` or `YES`, never run `gh pr merge`. The Orchestrator handles the merge (automatically for NO, after human reply for YES).
 
 ## Hard rules
 
