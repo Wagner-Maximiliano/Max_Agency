@@ -51,10 +51,10 @@ There are **no separate CTO/Architect routines**. One Claude Code routine handle
 Every unit of work is a GitHub issue that walks through labelled states. The Orchestrator moves it left-to-right; coders and the CTO do the work at each stage.
 
 ```
-kickoff ─▶ backlog ─▶ ready ─▶ in-progress ─▶ review ─▶ (human merge) ─▶ closed
+kickoff ─▶ backlog ─▶ ready ─▶ in-progress ─▶ review ─▶ closed
    │          │          │           │            │
- Architect  deps      deps        a coder       a CTO
- PLAN.md    pending   cleared     claims it,     reviews the PR,
+ Architect  deps      deps        a coder       a CTO         ↑ auto-merged (most cases)
+ PLAN.md    pending   cleared     claims it,     reviews,     ↑ OR you approve (if CTO says "needs human")
  parsed                           opens a PR     posts VERDICT
 ```
 
@@ -62,11 +62,28 @@ kickoff ─▶ backlog ─▶ ready ─▶ in-progress ─▶ review ─▶ (hum
 2. **backlog → ready** — when an issue's `Depends-on:` issues are all closed, the Orchestrator promotes it.
 3. **ready → in-progress** — the Orchestrator dispatches it (posts a comment, flips the label). Now a coder can see it.
 4. **a coder claims it** — adds itself as assignee, makes a branch, commits, opens a PR (`Closes #N`), flips the issue to `review`.
-5. **CTO review** — the Orchestrator opens a dedicated `role:cto` issue pointing at the PR. The CTO reads the diff + CI, posts `VERDICT: APPROVED | CHANGES REQUIRED | ESCALATE` as the first line.
-6. **routing** — `APPROVED` → Orchestrator asks you (the human) to merge. `CHANGES REQUIRED` → the task bounces back to `in-progress` for the coder. `ESCALATE` → it comes to you.
-7. **human merge → closed** — you merge the PR; the Orchestrator closes the task issue.
+5. **CTO review** — the Orchestrator opens a dedicated `role:cto` issue pointing at the PR. The CTO reads the diff + CI, posts a verdict with two parts: `VERDICT: APPROVED | CHANGES REQUIRED | ESCALATE` and `HUMAN-REVIEW: YES | NO`.
+6. **routing** — `APPROVED + HUMAN-REVIEW: NO` → Orchestrator **auto-merges** the PR, no human needed. `APPROVED + HUMAN-REVIEW: YES` → you get a plain-language Telegram message asking for sign-off. `CHANGES REQUIRED` → the task bounces back to `in-progress` for the coder. `ESCALATE` → it comes to you.
+7. **closed** — either auto-merged by the Orchestrator, or merged by you after human sign-off.
 
-**Safety gates that never move without a human:** only you merge PRs, and the CTO is always a *different* agent instance than the coder it reviews.
+**When you get a Telegram message asking to merge,** it will look like this — just reply with a number:
+
+```
+👀 YOUR EYES NEEDED — Your Project Name
+
+What the team built: Added a new page to the book
+Why I need you: This changes how the book looks — needs your eyes first
+
+📸 See the changes here: https://github.com/...
+🤖 AI quality check: Passed ✅
+
+Reply with a number:
+1️⃣ MERGE — looks good, ship it
+2️⃣ REJECT — send it back
+3️⃣ EXPLAIN — break it down for me
+```
+
+**Safety gates:** the CTO is always a *different* agent instance than the coder it reviews, and `HUMAN-REVIEW: YES` changes always wait for you before merging.
 
 > 📘 **New to all this?** Read `docs/How_Max_Agency_Works.pdf` — a fully illustrated, plain-language walkthrough of everything below.
 
@@ -141,7 +158,7 @@ Windows PowerShell (fill in your project repo):
 ```powershell
 $env:PROJECT_REPO = "Wagner-Maximiliano/your-project-repo"
 cd "C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine"
-.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "C:\Users\lobster\Github_Projects\Max_Agency" -IntervalMinutes 10
+.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "C:\Users\lobster\Github_Projects\Max_Agency" -IntervalMinutes 5
 ```
 
 **Check:** `Get-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine"` shows the task.
@@ -166,7 +183,7 @@ Windows PowerShell:
 ```powershell
 $env:PROJECT_REPO = "Wagner-Maximiliano/your-new-repo"
 cd "C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine"
-.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "C:\Users\lobster\Github_Projects\Max_Agency" -IntervalMinutes 10
+.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "C:\Users\lobster\Github_Projects\Max_Agency" -IntervalMinutes 5
 ```
 
 ### B4 — Kick off the Architect
@@ -425,9 +442,17 @@ rm -rf ~/.hermes-cache/Max_Agency
 
 ## G. Phone workflow
 
-- **Approve merges** — open PR, check CTO `VERDICT: APPROVED` + green CI, tap Merge.
-- **Escalations** — reply on Telegram or comment on the linked issue.
-- **Status** — read `State.md` in the project repo root.
-- **Pause a phase** — add label `blocked` to an issue from the GitHub app.
+Most PRs are merged automatically — you won't hear anything. You only get a message when the AI decided a human needs to look first (visual changes, things that can't be undone, etc.).
+
+**When you get a merge request on Telegram:**
+- Read the two plain-English lines explaining what changed and why you're being asked
+- Open the PR link to see the changes (GitHub shows a visual diff — green = added, red = removed)
+- Reply with: **1** to approve, **2** to send back, **3** if you need it explained more
+
+**Escalations** (something went wrong or the AI is stuck) — reply on Telegram or comment on the linked GitHub issue.
+
+**Status** — read `State.md` in the project repo root.
+
+**Pause a phase** — add label `blocked` to an issue from the GitHub app.
 
 You should never push code from your phone. If you need to, file an issue — the agents got stuck.

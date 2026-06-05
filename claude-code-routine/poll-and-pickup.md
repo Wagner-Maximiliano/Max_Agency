@@ -51,7 +51,13 @@ Every coder tick MUST `cd` into the project repo before any git/file work. If th
 8. **Switch to the project repo.** `cd $env:USERPROFILE\.hermes-cache\$env:PROJECT_REPO` (clone first if missing). Run `git fetch --all --prune && git checkout main && git pull --rebase`.
 9. **Work.** Follow the role's system prompt for one full cycle:
    - **Architect**: edit `PLAN.md` in the project repo on a branch `architect/<N>-<slug>`, commit, push, open PR, submit to CTO via issue comment.
-   - **CTO**: read `gh pr diff <PR-N> --repo $env:PROJECT_REPO` for the PR referenced in the issue body, AND check CI status with `gh pr checks <PR-N> --repo $env:PROJECT_REPO`. Verify against the linked task issue's AC and the Merge Acceptance Checklist in `agents/cto.md`. Post a single comment on THIS CTO review issue whose **very first line** is the literal token `VERDICT: APPROVED` or `VERDICT: CHANGES REQUIRED` or `VERDICT: ESCALATE` (nothing before it), followed by the checklist/change-list. **Do NOT close the CTO review issue** — leave it open so the Orchestrator can read the verdict and route it; the Orchestrator closes it. **Do not merge the PR.** A red CI check is an automatic `VERDICT: CHANGES REQUIRED`.
+   - **CTO**: read `gh pr diff <PR-N> --repo $env:PROJECT_REPO` for the PR referenced in the issue body, AND check CI status with `gh pr checks <PR-N> --repo $env:PROJECT_REPO`. Verify against the linked task issue's AC and the Merge Acceptance Checklist in `agents/cto.md`. Post a single comment on THIS CTO review issue. The comment MUST follow this exact structure — **the very first line is the verdict token**, the second line is `HUMAN-REVIEW: YES` or `HUMAN-REVIEW: NO`, the third line is `REASON:` (nothing before any of these — no `[agent]` header, no preamble):
+     ```
+     VERDICT: APPROVED
+     HUMAN-REVIEW: NO
+     REASON: <one plain sentence a non-technical person can understand>
+     ```
+     or `VERDICT: CHANGES REQUIRED` / `VERDICT: ESCALATE` (see `agents/cto.md` for full format). **Do NOT close the CTO review issue** — leave it open so the Orchestrator can read the verdict and route it; the Orchestrator closes it. **Do not merge the PR** — the Orchestrator handles the merge (automatically for `HUMAN-REVIEW: NO`, or after human approval for `HUMAN-REVIEW: YES`). A red CI check is an automatic `VERDICT: CHANGES REQUIRED`.
    - **Coder**: create branch `phase-<n>/<N>-<slug>` directly in the project repo clone (not a worktree — Windows worktrees add complexity; one branch per tick is enough). Edit files, commit incrementally with `phase-<n>/<N>: <subject>`, push, open PR with `Closes #<N>` in the body, move the task issue to `review` label.
 10. **Exit**. Print one-line status (see Output below) and exit.
 

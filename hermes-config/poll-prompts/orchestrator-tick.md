@@ -105,13 +105,14 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
       **PR branch:** \`<head-ref-name>\`
       **PR URL:** <pr-url>
 
-      Read the PR diff (\`gh pr diff <N>\`), check CI (\`gh pr checks <N>\`), the linked issue body, and any \`needs-adr: true\` decisions. Then post a single comment whose VERY FIRST LINE is one of these literal tokens (nothing before it — no provenance header):
+      Read the PR diff (\`gh pr diff <N>\`), check CI (\`gh pr checks <N>\`), the linked issue body, and any \`needs-adr: true\` decisions. Then post a single comment. The VERY FIRST LINE must be the verdict token (nothing before it — no provenance header), followed immediately by \`HUMAN-REVIEW:\` on line 2 and \`REASON:\` on line 3:
 
-      - \`VERDICT: APPROVED\` — followed by a checklist showing every AC verified. Only if CI is green.
-      - \`VERDICT: CHANGES REQUIRED\` — followed by a numbered list of changes, in AMA §5.1 format. A red/failing CI check is an automatic CHANGES REQUIRED.
+      - \`VERDICT: APPROVED\` + \`HUMAN-REVIEW: NO\` + \`REASON: <plain sentence>\` — CI green, all ACs met, change is reversible with no UI impact. Orchestrator will auto-merge.
+      - \`VERDICT: APPROVED\` + \`HUMAN-REVIEW: YES\` + \`REASON: <plain sentence the human can understand>\` — CI green, ACs met, but change touches UI / is irreversible / involves security or billing. Human must approve.
+      - \`VERDICT: CHANGES REQUIRED\` — followed by a numbered list of changes. A red/failing CI check is an automatic CHANGES REQUIRED.
       - \`VERDICT: ESCALATE\` — followed by the ambiguity that needs the human or Architect.
 
-      Do NOT merge the PR — only the human merges. Do NOT push commits to the branch. Do NOT close this issue — the Orchestrator reads your verdict, routes it, and closes this issue itself.
+      Do NOT merge the PR. Do NOT push commits to the branch. Do NOT close this issue — the Orchestrator reads your verdict, routes it, and closes this issue itself.
       EOF
       )" \
         --label "phase:<X>" \
@@ -122,20 +123,41 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
       Use `assigned:claude-opus` (per PLAN.md model roster — CTO sign-offs are gates → opus). Use the same `phase:<X>` label as the original task issue. Status starts at `in-progress` (not `ready`) so the next Claude Code tick picks it up immediately.
 
 9. **Handle CTO verdicts.** List open CTO review issues: `gh issue list --repo $PROJECT_REPO --label "role:cto" --state open --json number,body,comments`. For each, scan its comments for one whose text contains a line matching `VERDICT: APPROVED`, `VERDICT: CHANGES REQUIRED`, or `VERDICT: ESCALATE` (match the token anywhere in the comment, not only the first line — be tolerant of a stray provenance header, but prefer a first-line match). Parse the linked task issue number from the CTO review issue body (`Linked task issue: #<M>`). Then:
-   - `VERDICT: APPROVED` → escalate to human via Telegram with merge request (step 10). **Close the CTO review issue** (`gh issue close <cto-N> --comment "Routed: APPROVED, merge requested from human."`). Leave the linked task issue #<M> at `review` until the human merges; on merge it auto-closes via `Closes #<M>` in the PR body.
+   - `VERDICT: APPROVED` → also parse `HUMAN-REVIEW:` from the same comment (look for a line starting with `HUMAN-REVIEW:`). Then:
+     - **If `HUMAN-REVIEW: NO`** → auto-merge the PR: `gh pr merge <PR-N> --repo $PROJECT_REPO --squash --delete-branch`. Post a comment on the linked task issue: `Auto-merged by orchestrator: CTO approved, no human review required. PR #<N> merged.` **Close the CTO review issue** (`gh issue close <cto-N> --comment "Routed: APPROVED + HUMAN-REVIEW: NO — auto-merged."`). Step 7.5 will close the task issue on the next tick.
+     - **If `HUMAN-REVIEW: YES` or no `HUMAN-REVIEW:` line found** (default safe) → escalate to human with the plain-language format (step 10). **Close the CTO review issue** (`gh issue close <cto-N> --comment "Routed: APPROVED, waiting for human sign-off."`). Leave the linked task issue #<M> at `review` until the human merges.
    - `VERDICT: CHANGES REQUIRED` → on the LINKED TASK ISSUE #<M> (not the CTO review issue): post the verdict comment body verbatim, remove `review` and `blocked`, add `in-progress`, and clear its assignee (`gh issue edit <M> --remove-assignee <current-assignee>`) so a coder re-claims it. Then **close the CTO review issue**.
-   - `VERDICT: ESCALATE` → escalate to human (step 10). **Close the CTO review issue.**
+   - `VERDICT: ESCALATE` → escalate to human using the technical format (step 10). **Close the CTO review issue.**
 
    If a `role:cto` issue has NO parseable `VERDICT:` token in any comment AND has been open >60 minutes since creation, post one warning comment and escalate (step 10) — the CTO either hasn't been picked up (Claude Code outage) or forgot the token. Do NOT close it; it still needs a verdict.
 
-10. **Escalate.** If `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set in env, POST a message to the Telegram API in this exact format:
+10. **Escalate.** If `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set in env, POST a message to the Telegram API. Use the correct format based on the reason:
+
+    **For `VERDICT: APPROVED` + `HUMAN-REVIEW: YES` (human merge request):** Use the plain-language format — no jargon, visual, actionable:
+    ```
+    👀 YOUR EYES NEEDED — <project name>
+
+    What the team built: <one plain sentence, no technical jargon>
+    Why I need you: <one plain sentence — e.g. "this changes how the app looks" or "this can't be easily undone">
+
+    📸 See the changes here: <PR URL>
+    🤖 AI quality check: Passed ✅
+
+    Reply with a number:
+    1️⃣ MERGE — looks good, ship it
+    2️⃣ REJECT — send it back
+    3️⃣ EXPLAIN — break it down for me
+    ```
+
+    **For all other escalations** (`VERDICT: ESCALATE`, stale CTO, stale reclaim, other warnings): Use the technical format:
     ```
     [PROJECT] $PROJECT_REPO
-    [LEVEL] <WARN|BLOCK|MERGE|INFO>
+    [LEVEL] <WARN|BLOCK|ESCALATE|INFO>
     [CONTEXT] <one line>
     [ASK] <what you need from the human>
     [STATE] <URL to State.md or issue>
     ```
+
     If Telegram env vars are unset, append the message to `~/.hermes/profiles/orchestrator/escalations.log` instead.
 
 11. **Exit.** Print a single status line to stdout:

@@ -47,7 +47,6 @@
       "Bash(Remove-Item -Recurse:*)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
-      "Bash(gh pr merge:*)",
       "Bash(gh repo delete:*)",
       "Write(C\\:\\Users\\lobster\\Github_Projects\\Max_Agency\\agents\\**)",
       "Write(C\\:\\Users\\lobster\\Github_Projects\\Max_Agency\\docs\\**)",

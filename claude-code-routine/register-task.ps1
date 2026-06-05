@@ -2,7 +2,7 @@
 param(
   [Parameter(Mandatory=$true)][string]$Repo,
   [Parameter(Mandatory=$true)][string]$ProjectPath,
-  [int]$IntervalMinutes = 10,
+  [int]$IntervalMinutes = 5,
   [string]$TaskName = "MaxAgency-ClaudeCodeRoutine"
 )
 
