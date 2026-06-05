@@ -2,7 +2,7 @@
 
 Exact commands to register the polling jobs for each profile. **H2 runs these automatically** — the human normally does not run them by hand.
 
-`* * * * *` = every minute. Use `*/5 * * * *` for every 5 minutes if you want to reduce rate.
+`*/5 * * * *` = every 5 minutes (current setting). Change to `* * * * *` for every minute, but beware API quota burn.
 
 ## Actual hermes cron syntax
 
@@ -17,7 +17,7 @@ hermes cron add SCHEDULE PROMPT_TEXT --name NAME --profile PROFILE
 ## Orchestrator — registers via H2
 
 ```bash
-hermes cron add '* * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" \
+hermes cron add '*/5 * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" \
   --name "max-agency-orchestrator-tick" \
   --profile orchestrator
 ```
@@ -25,7 +25,7 @@ hermes cron add '* * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll
 ## Coder — registers via H2
 
 ```bash
-hermes cron add '* * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll-prompts/coder-tick.md)" \
+hermes cron add '*/5 * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll-prompts/coder-tick.md)" \
   --name "max-agency-coder-tick" \
   --profile coder
 ```
