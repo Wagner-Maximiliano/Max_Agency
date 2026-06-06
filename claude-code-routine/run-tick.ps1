@@ -59,5 +59,5 @@ $prompt = (Get-Content $PromptPath -Raw) `
 
 Set-Location $AgencyPath
 $env:PROJECT_REPO = $Repo
-$prompt | claude --model $modelAlias --print
+$prompt | claude --model $modelAlias --print --dangerously-skip-permissions
 exit $LASTEXITCODE
