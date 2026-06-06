@@ -31,7 +31,9 @@ The cron job registered by bootstrap **H2** wakes this profile every 60 seconds,
 
 ## Updating
 
-To change the model or toolsets: edit `~/.hermes/profiles/orchestrator/config.yaml` directly (or `orchestrator config set model.default <new-model>`).
+To change the **model**: edit `~/.hermes/config.yaml` (global Hermes config) — see Human_Runbook.md § A4. Do **not** set a model in this profile config; it intentionally inherits from global.
+
+To change **toolsets**: edit this file (`config.yaml`) — `toolsets:` block.
 
 To add new skills: add filenames to `skills.txt` in the public repo, then re-run H1.
 

@@ -1,13 +1,9 @@
 # Hermes profile config — coder
 # Installed to: ~/.hermes/profiles/coder/config.yaml
 
-model:
-  base_url: https://chatgpt.com/backend-api/codex
-  default: gpt-5-codex
-  provider: openai-codex
-
-auxiliary:
-  compression: gpt-5-mini
+# Model is intentionally NOT set here.
+# Configure the model once in ~/.hermes/config.yaml (global Hermes config).
+# All Max Agency profiles inherit from there — see Human_Runbook.md § A4.
 
 toolsets:
   - terminal

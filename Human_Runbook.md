@@ -138,7 +138,40 @@ Paste **H1**, wait for `BOOTSTRAP_H1_COMPLETE`. Edit the first line of **H2** wi
 
 **Undo:** see "Teardown" below.
 
-### A4 — Install the Claude Code routine
+### A4 — Configure the Hermes model
+
+All Hermes agents (orchestrator and coder) inherit their model from **one place**: the global Hermes config. No per-profile edits needed — changing this one file is enough.
+
+WSL:
+
+```bash
+nano ~/.hermes/config.yaml
+```
+
+Find the `model:` block near the top and set `provider` and `default`:
+
+```yaml
+model:
+  provider: openrouter
+  default: nvidia/nemotron-3-super-120b-a12b:free   # ← change this line
+```
+
+**Supported providers** (from the comments at the bottom of `~/.hermes/config.yaml`):
+
+| Provider | Auth | Notes |
+|---|---|---|
+| `openrouter` | `OPENROUTER_API_KEY` in `~/.hermes/.env` | Routes to any model — recommended |
+| `openai-codex` | ChatGPT OAuth (`hermes auth`) | Shares ChatGPT account quota; hits 429 under load |
+| `nous` | Nous Portal OAuth | |
+| `zai` | `ZAI_API_KEY` | Z.AI / GLM |
+
+The change takes effect on the **next tick** — no timer restart needed.
+
+> **Note:** The Claude Code routine (Windows) picks its model from the issue's `assigned:claude-*` label — that's a separate, per-task setting controlled by PLAN.md. Hermes and Claude Code are independent; configuring one does not affect the other.
+
+---
+
+### A5 — Install the Claude Code routine
 
 **Prerequisites (one-time installs):**
 
@@ -432,8 +465,8 @@ rm -rf ~/.hermes-cache/Max_Agency
 | OpenRouter rate limits | WSL: get job ID from `hermes -p orchestrator cron list`, `hermes cron remove <id>`, re-run H2 (change `* * * * *` to `*/5 * * * *` in the prompt). |
 | Claude Code routine fails with `401 Invalid authentication credentials` | The Claude Code OAuth token expired (~30-day life). Run `claude /login` in a PowerShell window, sign in, done. The scheduled task picks up the fresh token next tick. |
 | Claude Code routine "succeeds" (result 0) but does no work | The routine asked for `gh` permission it couldn't get headlessly. Confirm `.claude/settings.json` exists in the agency repo with the `gh`/`git` allowlist (it ships in the repo — `git pull` if missing). |
-| Hermes ticks all log `HTTP 429: usage limit reached` | The ChatGPT-Codex backend (model `gpt-5.4`) shares your ChatGPT account quota. Wait for the window to reset (a few hours), or switch the profile to an API-billed model. Not a code fault. |
-| Hermes ticks log `gpt-5-codex not supported when using Codex with a ChatGPT account` | Wrong model ID. Edit `~/.hermes/profiles/<profile>/config.yaml` → `default: gpt-5.4`, then `systemctl --user restart hermes-<profile>-tick.timer`. |
+| Hermes ticks all log `HTTP 429: usage limit reached` | Your provider's quota is exhausted. Switch to a free/API-billed provider: edit `~/.hermes/config.yaml` → `model.provider: openrouter` + set a free model. See § A4. |
+| Hermes ticks log `model not supported` or similar | Wrong model ID for the configured provider. Edit `~/.hermes/config.yaml` → correct `model.default`, then wait for next tick. See § A4. |
 | Issue stuck `in-progress` with an assignee but nobody working it | A coder claimed it then died mid-tick (every agent auths as the same GitHub user, so the assignee is a phantom). The Orchestrator's reclaim step clears it automatically within ~60 min; to unstick now, `gh issue edit <N> --remove-assignee <user> --remove-label blocked`. |
 | Merged PR but its issue stayed open | GitHub's `Closes #N` auto-close is unreliable. The Orchestrator's step 7.5 closes it on the next tick; or close it by hand. |
 | Profile cron jobs never execute (gateway ignores them) | On this machine, Hermes profile-cron isn't auto-run by the gateway — we use **systemd user timers** instead (`hermes-orchestrator-tick.timer`, `hermes-coder-tick.timer`). Check `systemctl --user list-timers`. |

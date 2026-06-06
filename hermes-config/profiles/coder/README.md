@@ -1,6 +1,6 @@
 # Coder Profile (Hermes side)
 
-Hermes profile that hosts the **non-Anthropic Coder** role of the Max Agency. Uses `openai/gpt-5-codex` via OpenRouter.
+Hermes profile that hosts the **Hermes Coder** role of the Max Agency. Model is inherited from the global Hermes config — see Human_Runbook.md § A4.
 
 ## Created by
 
