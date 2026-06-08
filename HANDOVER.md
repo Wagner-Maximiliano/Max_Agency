@@ -9,135 +9,166 @@
 
 ## What happened in this session
 
-This session focused on production readiness: hermes-cache auto-pull, end-to-end verification, improved logging, and making the Windows scheduled task run silently.
+This session focused on diagnosing why the orchestrator was burning all 40 turns without completing, and fixing the duplicate-issue bug.
 
-### Changes committed (commit `86ed86f`)
+### Changes committed (3 commits on top of `db269dc`)
 
-| File | What changed |
-|------|-------------|
-| `hermes-config/poll-prompts/orchestrator-tick.md` | Step 0 added: pull Max_Agency cache at tick start |
-| `hermes-config/hermes-orchestrator-tick.service` | NEW — service file template in repo (ExecStart + TimeoutStartSec=1200) |
-| `claude-code-routine/run-tick.vbs` | NEW — wscript.exe launcher so Windows task runs with no visible console window |
-| `claude-code-routine/run-tick.ps1` | Output redirected to `logs/claude-routine.log` with tick headers |
-| `claude-code-routine/register-task.ps1` | Uses wscript.exe+run-tick.vbs as action; LogonType Interactive (window suppressed by vbs) |
-| `Human_Runbook.md` | A3b updated with new ExecStart patch steps; adds troubleshooting rows for window/log issues |
+| Commit | What changed |
+|--------|-------------|
+| `3301e57` | Revert max_turns 60→40 and timeout 1800→1200 everywhere; remove dead step 0 (sandbox git pull, always fails) and step 3 (rebuild-state via PowerShell, never available in WSL) from orchestrator-tick.md |
+| `2501806` | Fix step 8 idempotency: a closed CTO review with `VERDICT: CHANGES REQUIRED` now re-creates a fresh review instead of silently skipping — fixes the post-rework re-review cycle |
+| `92ebf83` | Fix duplicate issue creation: kickoff→planned label swap now happens at the **start** of kickoff processing (before any child issues created), not at the end — acts as a mutex against session-compression re-runs |
 
-### Live system changes (WSL service file)
+### Manual actions taken on GitHub
 
-The `/home/hermes/.config/systemd/user/hermes-orchestrator-tick.service` ExecStart was updated to:
+- Closed duplicate issues **#33, #34, #35, #36, #37, #38** (each was a duplicate of #39–#44 created by a double kickoff run)
+- Manually created **CTO review issue #48** for PR #31 (glossary re-review after fixes were applied and CI turned green)
+
+---
+
+## Root cause analysis: why orchestrator was burning 40 turns
+
+Three compounding problems:
+
+1. **10 duplicate in-progress issues** — step 7 (reclaim check) was inspecting each one individually, consuming ~15 turns before reaching steps 8-9. Fixed by closing the duplicates AND fixing the kickoff mutex.
+
+2. **Two dead steps at the top of the prompt** — step 0 (git pull in sandbox, path doesn't exist) and step 3 (rebuild-state via PowerShell, not available in WSL) each wasted 2-3 turns per tick for zero benefit. Both removed.
+
+3. **The model itself is the underlying problem** — `nvidia/nemotron-3-super-120b-a12b:free` averages 10–35 seconds per API call. At 40 turns that is 10–15 minutes per tick, longer than the 5-minute tick interval. Ticks queue behind each other. The orchestrator doesn't need a large model — it reads GitHub issues and runs `gh` commands. **This is the #1 priority for the next session.**
+
+---
+
+## Priority 1 — Switch the orchestrator model (BLOCKING)
+
+The free nemotron model is too slow for reliable operation. The fix is to change the model in two places:
+
+**1. Live WSL profile config:**
 ```bash
-ExecStart=/bin/bash -c 'L=/home/hermes/.hermes/profiles/orchestrator/cron-output.log; echo "=== TICK $(date -Iseconds) ===" >> "$L"; git -C /home/hermes/.hermes-cache/Max_Agency pull --rebase 2>&1 | grep -v "^Already up to date" >> "$L" || true; /home/hermes/.local/bin/hermes -p orchestrator chat -m nvidia/nemotron-3-super-120b-a12b:free -q "$(cat /home/hermes/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" -Q --accept-hooks --yolo --max-turns 40 2>&1 | tail -5 >> "$L"'
+wsl -u hermes -- nano ~/.hermes/profiles/orchestrator/config.yaml
+# Change: default: nvidia/nemotron-3-super-120b-a12b:free
+# To:     default: <new-model-id>
 ```
 
-This is the same ExecStart as the repo template. `systemctl --user daemon-reload` was run.
+**2. Repo template** (keeps setup script in sync):
+`hermes-config/profiles/orchestrator/config.yaml` — change `model.default`
 
-### Windows scheduled task
+**3. Service file ExecStart** (the `-m` flag must also match):
+`hermes-config/hermes-orchestrator-tick.service` — change `-m nvidia/nemotron-3-super-120b-a12b:free`
 
-The `MaxAgency-ClaudeCodeRoutine` task was updated to use `wscript.exe` + `run-tick.vbs` as the launcher. It fires every 5 minutes and writes to `C:\Users\lobster\Github_Projects\Max_Agency\logs\claude-routine.log`.
+Then patch the live service:
+```bash
+wsl -u hermes -- bash -c "sed -i 's|nvidia/nemotron-3-super-120b-a12b:free|<new-model-id>|g' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload"
+```
 
----
+**Recommended model options** (all available on OpenRouter, fast, cheap, good instruction-following):
 
-## Current state — what is already working
+| Model ID | Why |
+|----------|-----|
+| `google/gemini-flash-1.5` | Very fast (~1-2s/call), cheap, handles structured prompts well |
+| `openai/gpt-4o-mini` | Fast (~2s/call), extremely reliable at following numbered steps |
+| `anthropic/claude-haiku-4-5-20251001` | Fast, same family as the coder, strong instruction following |
+| `mistralai/mistral-small-3.1-24b-instruct` | Fast free-tier option |
 
-| System | State |
-|--------|-------|
-| `run-tick.ps1` line 62 | Has `--dangerously-skip-permissions` ✅ |
-| WSL Hermes orchestrator service | `--max-turns 40`, `TimeoutStartSec=1200` ✅ |
-| Windows Scheduled Task | Runs every 5 min via wscript.exe (no window), writes to log ✅ |
-| Per-profile model config | Both orchestrator and coder use nemotron:free via OpenRouter ✅ |
-| hermes-cache auto-pull | Service ExecStart pulls Max_Agency before each tick ✅ |
-| Issue body template | 4-section format committed ✅ |
-| Rework loop fix | `poll-and-pickup.md` coder checks existing branch, reads all comments ✅ |
-
----
-
-## Critical path issue: hermes terminal sandbox
-
-**Important for debugging:** The Hermes terminal toolset runs commands with `~` resolving to the **sandbox home** at `/home/hermes/.hermes/profiles/orchestrator/home/`, NOT the actual `/home/hermes/`. So:
-
-- `~/.hermes-cache/` in tool calls → `/home/hermes/.hermes/profiles/orchestrator/home/.hermes-cache/`
-- The PROJECT_REPO clone lives at: `~/.hermes/profiles/orchestrator/home/.hermes-cache/Wagner-Maximiliano/Surviving_The_AI_World/` ✅ (correct)
-- `~/.hermes-cache/Max_Agency/` does NOT exist in the sandbox — step 0 in orchestrator-tick.md fails silently (non-fatal, `|| true`)
-- The ExecStart git pull uses absolute path `/home/hermes/.hermes-cache/Max_Agency/` (correct)
+**After switching:** watch the next tick complete cleanly in under 5 minutes via:
+```bash
+wsl -u hermes -- bash -c "tail -f ~/.hermes/profiles/orchestrator/cron-output.log"
+```
+Expected: tick header → TICK_OK within 3-4 minutes.
 
 ---
 
-## Current state of Surviving_The_AI_World
+## Priority 2 — Close orphaned PR #45
 
-As of 2026-06-08 ~11:53 CEST:
+PR [#45](https://github.com/Wagner-Maximiliano/Surviving_The_AI_World/pull/45) (`phase-0/38-readme-contributing`) was opened for issue #38, which was closed this session as a duplicate. The PR is now orphaned.
 
-### Open issues
-- **#30** `phase:1, assigned:claude-haiku, role:coder` — no state label — GLOSSARY task in limbo (should be `in-progress` after orchestrator routes CHANGES REQUIRED from #32)
-- **#32** `in-progress, assigned:claude-opus, role:cto` — CTO review for PR #31 — has `VERDICT: CHANGES REQUIRED` comment — orchestrator should route and close
-- **#33, #39** `0/0.1: Repo skeleton` — duplicated (orchestrator created same task twice)
-- **#34, #40** `0/0.2: Pandoc` — duplicated
-- **#35, #41** `0/0.3: Vale styles` — duplicated
-- **#36, #42** `0/0.4: GitHub Actions` — duplicated
-- **#37, #43** `0/0.5: Pre-commit hooks` — duplicated
-- **#38, #44** `review` — README+CONTRIBUTING — PRs #45, #46 open (also duplicated)
+```bash
+gh pr close 45 --repo Wagner-Maximiliano/Surviving_The_AI_World --comment "Closing: linked issue #38 was a duplicate of #44. Work continues on PR #46."
+```
+
+---
+
+## Priority 3 — Monitor the active review cycles
+
+Two CTO review issues are in-flight; the Claude Code routine (opus) should pick them up:
+
+| Issue | Reviews | PR | CI | Expected outcome |
+|-------|---------|----|----|-----------------|
+| **#48** | PR #31 (GLOSSARY) | [#31](https://github.com/Wagner-Maximiliano/Surviving_The_AI_World/pull/31) | ✅ Green | VERDICT: APPROVED → orchestrator auto-merges |
+| **#47** | PR #46 (README/CONTRIBUTING) | [#46](https://github.com/Wagner-Maximiliano/Surviving_The_AI_World/pull/46) | ❌ Red | VERDICT: CHANGES REQUIRED → coder fixes Vale CI → re-review |
+
+PR #46 has the same Vale tarball download failure that PR #31 had. The coder already fixed it on the `phase-1/30-glossary` branch — the fix needs to be applied to `phase-0/44-readme-contributing-manuscript` too. The correct fix (from PR #31 commit `5d67447`) is retry logic / follow-redirects in the Vale install step of `.github/workflows/book.yml`.
+
+After #47 routes CHANGES REQUIRED to issue #44:
+1. Coder picks up #44 (it will get `in-progress`, no assignee)
+2. Coder checks out existing branch `phase-0/44-readme-contributing-manuscript`
+3. Fixes Vale download in workflow
+4. Pushes → PR #46 CI turns green
+5. Issue #44 re-labelled `review`
+6. Orchestrator creates new CTO review → APPROVED → auto-merge
+
+---
+
+## Priority 4 — hermes-coder issues #39–#43 (Phase 0 tasks)
+
+Five Phase 0 tasks are `in-progress` for `hermes-coder` with no assignees — Hermes hasn't picked them up yet.
+
+| Issue | Task |
+|-------|------|
+| #39 | 0/0.1: Repo skeleton + directory layout + ADR stubs |
+| #40 | 0/0.2: Pandoc build config (Makefile + defaults, xelatex template) |
+| #41 | 0/0.3: Vale styles + proselint config |
+| #42 | 0/0.4: GitHub Actions workflow |
+| #43 | 0/0.5: Pre-commit hooks |
+
+These depend on #39 (repo skeleton) being done first — #40-#43 all depend on the directory structure existing. If the Hermes coder timer is working, it should pick up #39 first. Check `hermes-coder-tick` timer status:
+
+```bash
+wsl -u hermes -- bash -c "systemctl --user list-timers | grep hermes"
+wsl -u hermes -- bash -c "tail -20 ~/.hermes/profiles/coder/cron-output.log 2>/dev/null || echo 'no coder log yet'"
+```
+
+---
+
+## Current GitHub state (as of ~13:27 CEST 2026-06-08)
+
+### Open issues (9)
+
+| # | Title | Labels | Assignees |
+|---|-------|--------|-----------|
+| #48 | CTO review: PR #31 (GLOSSARY) | `in-progress`, `phase:1`, `assigned:claude-opus`, `role:cto` | Wagner-Maximiliano |
+| #47 | CTO review: PR #46 (README/CONTRIBUTING) | `in-progress`, `phase:0`, `assigned:claude-opus`, `role:cto` | Wagner-Maximiliano |
+| #44 | 0/0.6: README + CONTRIBUTING | `review`, `phase:0`, `assigned:claude-haiku`, `role:coder` | — |
+| #43 | 0/0.5: Pre-commit hooks | `in-progress`, `phase:0`, `assigned:hermes-coder`, `role:coder` | — |
+| #42 | 0/0.4: GitHub Actions workflow | `in-progress`, `phase:0`, `assigned:hermes-coder`, `role:coder` | — |
+| #41 | 0/0.3: Vale styles | `in-progress`, `phase:0`, `assigned:hermes-coder`, `role:coder` | — |
+| #40 | 0/0.2: Pandoc build config | `in-progress`, `phase:0`, `assigned:hermes-coder`, `role:coder` | — |
+| #39 | 0/0.1: Repo skeleton | `in-progress`, `phase:0`, `assigned:hermes-coder`, `role:coder` | Wagner-Maximiliano |
+| #30 | phase-1/1.7: GLOSSARY | `review`, `phase:1`, `assigned:claude-haiku`, `role:coder` | — |
 
 ### Open PRs
-- **#31**: `phase-1/30-glossary` — CHANGES REQUIRED (trailing newline + Vale CI fix)
-- **#45**: `phase-0/38-readme-contributing`
-- **#46**: `phase-0/44-readme-contributing-manuscript`
 
-### Orchestrator tick in progress
-- Session `20260608_113834` started at 11:38 CEST, API call #20+ at 11:53 CEST
-- Expected to: route CHANGES REQUIRED from #32 → #30, dispatch Phase 0 tasks, handle new PRs
-
----
-
-## What the next session must do
-
-### Priority 1 — Verify end-to-end routing closes
-
-After the 11:38 tick completes (~11:55-12:05 CEST), check:
-1. Is issue #32 closed?
-2. Does issue #30 now have `in-progress` label and no assignee?
-3. Does the cron-output.log show `TICK_OK`?
-
-If issue #32 is NOT closed and #30 is still in limbo, the orchestrator's step 9 (verdict routing) may need debugging. In that case, manually close #32 and re-add `in-progress` to #30, then remove its assignee, and watch the next Claude Code tick pick up #30.
-
-### Priority 2 — Resolve duplicate Phase 0 issues
-
-Issues #33–#43 are duplicates of an earlier set (#39–#44 range). The orchestrator created them twice from the same PLAN.md task table. You need to:
-- Close the older duplicates (keep the lower-numbered ones) OR
-- Let the orchestrator handle them (its idempotency check should prevent further duplication)
-
-Consider adding a `kickoff-handled` idempotency guard so this can't happen again.
-
-### Priority 3 — Monitor GLOSSARY rework
-
-After issue #30 gets `in-progress`, the Claude Code routine should pick it up (haiku model). The new `poll-and-pickup.md` tells the coder to:
-1. Check for existing branch (`phase-1/30-glossary` exists)
-2. Read ALL comments (the CHANGES REQUIRED list from #32's comment)
-3. Fix: add trailing newline, fix Vale CI in `.github/workflows/book.yml`
-4. Push to existing branch (PR #31 auto-updates)
-5. Re-label as `review`
-
-Watch that this rework cycle closes cleanly.
-
-### Priority 4 — jq installation in WSL
-
-```bash
-wsl -u hermes -- bash -c "sudo apt-get install -y jq"
-```
-
-This prevents the orchestrator from wasting turns on `| jq '...'` pipe failures.
+| # | Branch | CI | Notes |
+|---|--------|----|-------|
+| [#46](https://github.com/Wagner-Maximiliano/Surviving_The_AI_World/pull/46) | phase-0/44-readme-contributing-manuscript | ❌ Red | Vale CI failure — awaiting CTO #47 verdict |
+| [#45](https://github.com/Wagner-Maximiliano/Surviving_The_AI_World/pull/45) | phase-0/38-readme-contributing | ✅ Green | **Orphaned** — close it |
+| [#31](https://github.com/Wagner-Maximiliano/Surviving_The_AI_World/pull/31) | phase-1/30-glossary | ✅ Green | Awaiting CTO #48 verdict |
 
 ---
 
 ## Monitoring commands
 
 ```bash
-# Orchestrator log
+# Orchestrator tick output (last result)
 wsl -u hermes -- bash -c "tail -20 ~/.hermes/profiles/orchestrator/cron-output.log"
 
-# Live agent activity
-wsl -u hermes -- bash -c "tail -f ~/.hermes/profiles/orchestrator/logs/agent.log"
+# Live orchestrator activity
+wsl -u hermes -- bash -c "strings ~/.hermes/profiles/orchestrator/logs/agent.log | grep 'API call\|Turn ended' | tail -10"
 
-# Claude Code routine log
-Get-Content C:\Users\lobster\Github_Projects\Max_Agency\logs\claude-routine.log -Tail 20
+# Timer schedule
+wsl -u hermes -- bash -c "systemctl --user list-timers | grep hermes"
+
+# Claude Code routine log (Windows)
+# Use PowerShell: Get-Content C:\Users\lobster\Github_Projects\Max_Agency\logs\claude-routine.log -Tail 30
 
 # GitHub state
 gh issue list --repo Wagner-Maximiliano/Surviving_The_AI_World --state open --limit 20
@@ -146,34 +177,27 @@ gh pr list --repo Wagner-Maximiliano/Surviving_The_AI_World --state open
 
 ---
 
-## Reference: key file paths
+## Key file paths
 
 | What | Path |
 |------|------|
-| Claude Code routine launch script | `C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine\run-tick.ps1` |
-| Claude Code silent launcher | `C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine\run-tick.vbs` |
-| Claude Code routine log | `C:\Users\lobster\Github_Projects\Max_Agency\logs\claude-routine.log` |
-| Claude Code coder/CTO prompt | `C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine\poll-and-pickup.md` |
-| Orchestrator tick prompt | `C:\Users\lobster\Github_Projects\Max_Agency\hermes-config\poll-prompts\orchestrator-tick.md` |
-| Orchestrator systemd service (WSL) | `~/.config/systemd/user/hermes-orchestrator-tick.service` |
-| Hermes global config (WSL) | `~/.hermes/config.yaml` |
-| Orchestrator profile config (WSL) | `~/.hermes/profiles/orchestrator/config.yaml` |
-| Coder profile config (WSL) | `~/.hermes/profiles/coder/config.yaml` |
-| Max_Agency cache — actual home (WSL) | `/home/hermes/.hermes-cache/Max_Agency/` |
-| Max_Agency cache — sandbox home (WSL) | `/home/hermes/.hermes/profiles/orchestrator/home/.hermes-cache/` |
-| Project repo clone — sandbox (WSL) | `/home/hermes/.hermes/profiles/orchestrator/home/.hermes-cache/Wagner-Maximiliano/Surviving_The_AI_World/` |
-| Orchestrator cron log | `/home/hermes/.hermes/profiles/orchestrator/cron-output.log` |
-| Orchestrator heartbeat | `/home/hermes/.hermes/profiles/orchestrator/heartbeat.txt` |
-| Agency repo on Windows | `C:\Users\lobster\Github_Projects\Max_Agency` |
+| Orchestrator tick prompt | `hermes-config/poll-prompts/orchestrator-tick.md` |
+| Orchestrator profile config (repo template) | `hermes-config/profiles/orchestrator/config.yaml` |
+| Orchestrator service template | `hermes-config/hermes-orchestrator-tick.service` |
+| Live orchestrator profile config (WSL) | `~/.hermes/profiles/orchestrator/config.yaml` |
+| Live service file (WSL) | `~/.config/systemd/user/hermes-orchestrator-tick.service` |
+| Orchestrator cron log (WSL) | `~/.hermes/profiles/orchestrator/cron-output.log` |
+| Claude Code routine script | `claude-code-routine/run-tick.ps1` |
+| Claude Code routine log | `logs/claude-routine.log` |
 
 ---
 
 ## What NOT to touch
 
-- Do NOT re-apply the `--dangerously-skip-permissions` fix — it is already committed.
-- Do NOT change the orchestrator model config — it's in profile configs and working.
-- Do NOT re-create issues #30 or #32 — they need to be routed by the orchestrator.
-- Do NOT change the Windows Scheduled Task command line manually — use `register-task.ps1` to regenerate.
+- Do NOT change `goals.max_turns` above 40 — the problem is the model speed, not the turn count.
+- Do NOT re-create issues #30, #39–#44, #47, #48 — they are all legitimately open.
+- Do NOT close PRs #31 or #46 — they are active work.
+- Do NOT re-apply the kickoff mutex fix — it is already committed (`92ebf83`).
 
 ---
 
