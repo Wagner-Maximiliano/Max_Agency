@@ -157,21 +157,24 @@ systemctl --user restart hermes-orchestrator-tick.timer
 
 ### A4 — Configure the Hermes model
 
-All Hermes agents (orchestrator and coder) inherit their model from **one place**: the global Hermes config. No per-profile edits needed — changing this one file is enough.
+Each agent has its model set **in its own profile config** — orchestrator and coder can be changed independently without touching the global Hermes config.
 
 WSL:
 
 ```bash
-nano ~/.hermes/config.yaml
+nano ~/.hermes/profiles/orchestrator/config.yaml   # orchestrator model
+nano ~/.hermes/profiles/coder/config.yaml          # coder model
 ```
 
-Find the `model:` block near the top and set `provider` and `default`:
+Find the `model:` block and change `default` and/or `max_tokens`:
 
 ```yaml
 model:
-  provider: openrouter
   default: nvidia/nemotron-3-super-120b-a12b:free   # ← change this line
+  max_tokens: 16384                                  # keep ≤ OpenRouter credit balance
 ```
+
+The global `~/.hermes/config.yaml` model is **not used** by these profiles — it remains as a fallback for other Hermes usage.
 
 **Supported providers** (from the comments at the bottom of `~/.hermes/config.yaml`):
 

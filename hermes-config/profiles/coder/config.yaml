@@ -1,9 +1,18 @@
 # Hermes profile config — coder
 # Installed to: ~/.hermes/profiles/coder/config.yaml
 
-# Model is intentionally NOT set here.
-# Configure the model once in ~/.hermes/config.yaml (global Hermes config).
-# All Max Agency profiles inherit from there — see Human_Runbook.md § A4.
+# Model is set here per-profile so each agent can be changed independently.
+# To swap the coder model, edit `model.default` below.
+# The global ~/.hermes/config.yaml default is NOT used when this is set.
+model:
+  base_url: https://openrouter.ai/api/v1
+  provider: openrouter
+  api_mode: chat_completions
+  default: nvidia/nemotron-3-super-120b-a12b:free
+  max_tokens: 16384
+
+goals:
+  max_turns: 40
 
 toolsets:
   - terminal
