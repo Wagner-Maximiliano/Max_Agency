@@ -4,6 +4,10 @@ worktrees/
 .env
 .env.local
 .claude/settings.local.json
+_vale_ini_tmp.ini
+Userslobster*/
+max-agency-diagram.html
+logs/
 node_modules/
 __pycache__/
 *.pyc

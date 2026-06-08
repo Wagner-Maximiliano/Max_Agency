@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Max Agency — How It Works</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 2.5em;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 40px;
+      font-size: 1.1em;
+    }
+
+    .section-title {
+      font-size: 1.8em;
+      color: #667eea;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .component {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .component h3 {
+      font-size: 1.4em;
+      margin-bottom: 15px;
+    }
+
+    .component-detail {
+      font-size: 0.95em;
+      line-height: 1.8;
+      margin-bottom: 10px;
+    }
+
+    .hermes-component {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .claude-component {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .github-component {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .flow-diagram {
+      background: #f8f9fa;
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 40px;
+      border: 2px solid #e0e0e0;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+    }
+
+    .flow-box {
+      background: white;
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 10px;
+      flex: 1;
+      min-width: 200px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .flow-box-title {
+      font-weight: bold;
+      color: #667eea;
+      font-size: 1.1em;
+      margin-bottom: 8px;
+    }
+
+    .flow-box-description {
+      font-size: 0.9em;
+      color: #555;
+      line-height: 1.6;
+    }
+
+    .flow-arrow {
+      text-align: center;
+      color: #667eea;
+      font-size: 2em;
+      font-weight: bold;
+      margin: 0 10px;
+      flex: 0.5;
+    }
+
+    .legend {
+      background: #f0f4ff;
+      border-left: 5px solid #667eea;
+      padding: 25px;
+      border-radius: 8px;
+      margin-bottom: 40px;
+    }
+
+    .legend-title {
+      font-size: 1.3em;
+      color: #667eea;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    .legend-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 15px;
+    }
+
+    .legend-item {
+      background: white;
+      padding: 15px;
+      border-radius: 6px;
+      border-left: 3px solid #667eea;
+    }
+
+    .legend-term {
+      font-weight: bold;
+      color: #333;
+      font-size: 1.05em;
+    }
+
+    .legend-definition {
+      color: #666;
+      font-size: 0.95em;
+      margin-top: 5px;
+      line-height: 1.5;
+    }
+
+    .timeline {
+      position: relative;
+      padding: 20px 0;
+    }
+
+    .timeline-item {
+      display: flex;
+      margin-bottom: 30px;
+      position: relative;
+    }
+
+    .timeline-marker {
+      width: 40px;
+      height: 40px;
+      background: #667eea;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-right: 20px;
+    }
+
+    .timeline-content {
+      flex: 1;
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      border-left: 3px solid #667eea;
+    }
+
+    .timeline-content-title {
+      font-weight: bold;
+      color: #333;
+      font-size: 1.1em;
+      margin-bottom: 8px;
+    }
+
+    .timeline-content-description {
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .role-section {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .role-card {
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .role-card-header {
+      font-size: 1.3em;
+      font-weight: bold;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #667eea;
+    }
+
+    .role-card-content {
+      font-size: 0.95em;
+      line-height: 1.7;
+      color: #555;
+    }
+
+    .role-card-content li {
+      margin-left: 20px;
+      margin-bottom: 8px;
+    }
+
+    .highlight-box {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    .highlight-box-title {
+      font-weight: bold;
+      color: #856404;
+      margin-bottom: 8px;
+    }
+
+    .highlight-box-text {
+      color: #856404;
+      line-height: 1.6;
+    }
+
+    .key-point {
+      background: #e7f3ff;
+      border-left: 4px solid #2196F3;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+
+    .key-point-text {
+      color: #0c5aa0;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Max Agency</h1>
+    <p class="subtitle">How an AI-powered team manages your software projects</p>
+
+    <!-- LEGEND SECTION -->
+    <div class="legend">
+      <div class="legend-title">📖 Important Terms (Read This First!)</div>
+      <div class="legend-grid">
+        <div class="legend-item">
+          <div class="legend-term">PR (Pull Request)</div>
+          <div class="legend-definition">A request to add new code to a project. Think of it as a "draft" that gets reviewed before final approval.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">CI (Continuous Integration)</div>
+          <div class="legend-definition">Automatic checks that run to make sure new code doesn't break anything. Like a quality test.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">Issue</div>
+          <div class="legend-definition">A task or problem tracked on GitHub. Each job the AI does is tracked as an issue.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">Label</div>
+          <div class="legend-definition">A tag attached to issues (like "assigned:claude-opus" or "phase:1") that helps organize and route work.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">GitHub</div>
+          <div class="legend-definition">A website where code is stored and teams collaborate. Max Agency uses it as the "bulletin board" for all work.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">Merge / Auto-merge</div>
+          <div class="legend-definition">When approved code is added to the final project. "Auto-merge" means the AI does it automatically without waiting for a human.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">Branch</div>
+          <div class="legend-definition">A separate copy of the code where changes are made before merging back to the main version. Like a draft workspace.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">API Key</div>
+          <div class="legend-definition">A secret password that allows the AI to access AI services. Like login credentials but for machines.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">WSL (Windows Subsystem for Linux)</div>
+          <div class="legend-definition">A tool that lets Windows run Linux commands. One of Max Agency's "brains" lives here.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">Hermes</div>
+          <div class="legend-definition">One of the AI agents (runs in WSL). Handles repetitive queue management and coding tasks.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">Orchestrator</div>
+          <div class="legend-definition">The manager AI. Decides which AI does what job and keeps everything moving.</div>
+        </div>
+        <div class="legend-item">
+          <div class="legend-term">CTO Review</div>
+          <div class="legend-definition">Quality check by an AI expert before code is merged. Makes sure the code is good enough.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARCHITECTURE SECTION -->
+    <h2 class="section-title">🏗️ The Three Parts of Max Agency</h2>
+    <div class="architecture">
+      <div class="component hermes-component">
+        <h3>Hermes (Linux Brain)</h3>
+        <div class="component-detail">
+          Runs in WSL<br><strong>Location:</strong> Linux side of your Windows computer
+        </div>
+        <div class="component-detail">
+          <strong>Jobs:</strong>
+          <ul style="list-style: none; padding: 0;">
+            <li>✓ Orchestrator (manager)</li>
+            <li>✓ Coder (programmer)</li>
+          </ul>
+        </div>
+        <div class="component-detail">
+          <strong>Works 24/7</strong> on a schedule (every 5 minutes)
+        </div>
+      </div>
+
+      <div class="component github-component">
+        <h3>GitHub (The Bulletin Board)</h3>
+        <div class="component-detail">
+          <strong>The Hub:</strong> Everything happens here
+        </div>
+        <div class="component-detail">
+          <strong>What's tracked:</strong>
+          <ul style="list-style: none; padding: 0;">
+            <li>✓ Tasks (Issues)</li>
+            <li>✓ Code changes (PRs)</li>
+            <li>✓ Progress status</li>
+          </ul>
+        </div>
+        <div class="component-detail">
+          All AIs read and write here
+        </div>
+      </div>
+
+      <div class="component claude-component">
+        <h3>Claude Code (Windows Brain)</h3>
+        <div class="component-detail">
+          Runs on your Windows computer<br><strong>Every 5 minutes</strong>
+        </div>
+        <div class="component-detail">
+          <strong>Jobs:</strong>
+          <ul style="list-style: none; padding: 0;">
+            <li>✓ Architect (planner)</li>
+            <li>✓ CTO (reviewer)</li>
+            <li>✓ Coder (programmer)</li>
+          </ul>
+        </div>
+        <div class="component-detail">
+          The main AI team
+        </div>
+      </div>
+    </div>
+
+    <div class="key-point">
+      <div class="key-point-text">
+        <strong>💡 Key Idea:</strong> Hermes and Claude Code are separate. Hermes handles background jobs in Linux. Claude Code handles complex decisions on Windows. GitHub is the meeting point where they talk through issues and pull requests.
+      </div>
+    </div>
+
+    <!-- FLOW DIAGRAM -->
+    <h2 class="section-title">🔄 The Complete Workflow: From Task to Done</h2>
+
+    <div class="flow-diagram">
+      <h3 style="margin-bottom: 20px; color: #333;">Step 1: Start a Project</h3>
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-title">You</div>
+          <div class="flow-box-description">Write a brief description of what you want built and paste a special prompt into Claude Desktop</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">
+          <div class="flow-box-title">Architect AI</div>
+          <div class="flow-box-description">Reads your brief, asks clarifying questions, creates a detailed PLAN.md with all tasks broken down</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">
+          <div class="flow-box-title">GitHub Issue Created</div>
+          <div class="flow-box-description">A "kickoff" issue is created with the plan attached</div>
+        </div>
+      </div>
+
+      <h3 style="margin-bottom: 20px; color: #333; margin-top: 30px;">Step 2: Orchestrator Reads the Plan</h3>
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-title">Orchestrator AI (Hermes)</div>
+          <div class="flow-box-description">Every 5 minutes, reads the kickoff issue and PLAN.md. Creates one GitHub issue for each task in the plan. Labels them with who should do the work.</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">
+          <div class="flow-box-title">Issues Created</div>
+          <div class="flow-box-description">Issues labeled:<br>• "phase:0" (which phase)<br>• "assigned:claude-opus" (which AI)<br>• "backlog" (waiting status)</div>
+        </div>
+      </div>
+
+      <h3 style="margin-bottom: 20px; color: #333; margin-top: 30px;">Step 3: Promote & Dispatch</h3>
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-title">Orchestrator Promotes</div>
+          <div class="flow-box-description">If a task has no dependencies (or all are done), moves it from "backlog" to "ready"</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">
+          <div class="flow-box-title">Orchestrator Dispatches</div>
+          <div class="flow-box-description">Changes label to "in-progress". The right AI (Hermes Coder or Claude Code) sees it and claims the issue</div>
+        </div>
+      </div>
+
+      <h3 style="margin-bottom: 20px; color: #333; margin-top: 30px;">Step 4: AI Does the Work</h3>
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-title">Coder AI</div>
+          <div class="flow-box-description">
+            Creates a branch<br>
+            Makes code changes<br>
+            Commits and pushes<br>
+            Opens a PR (Pull Request)
+          </div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">
+          <div class="flow-box-title">GitHub PR Created</div>
+          <div class="flow-box-description">Shows all changes the AI made. Includes message "Closes #N" (links back to the original issue)</div>
+        </div>
+      </div>
+
+      <h3 style="margin-bottom: 20px; color: #333; margin-top: 30px;">Step 5: Quality Review (CTO Review)</h3>
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-title">Orchestrator Creates CTO Issue</div>
+          <div class="flow-box-description">Creates a special issue asking the CTO AI to review the PR. Posts a link to the PR and acceptance criteria.</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-box">
+          <div class="flow-box-title">CTO AI Reviews</div>
+          <div class="flow-box-description">
+            Reads the PR<br>
+            Checks if CI (tests) pass<br>
+            Posts a verdict: APPROVED or CHANGES REQUIRED
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-bottom: 20px; color: #333; margin-top: 30px;">Step 6: Merge (Automatic or Manual)</h3>
+      <div class="flow-row">
+        <div class="flow-box">
+          <div class="flow-box-title">APPROVED + HUMAN-REVIEW: NO</div>
+          <div class="flow-box-description">Orchestrator auto-merges the PR. Issue closes automatically. ✓ DONE</div>
+        </div>
+        <div class="flow-arrow">OR</div>
+        <div class="flow-box">
+          <div class="flow-box-title">APPROVED + HUMAN-REVIEW: YES</div>
+          <div class="flow-box-description">You get a Telegram message asking you to approve. Click approve and the Orchestrator merges. ✓ DONE</div>
+        </div>
+      </div>
+
+      <div class="flow-row" style="margin-top: 20px;">
+        <div class="flow-box" style="width: 100%;">
+          <div class="flow-box-title">OR: CHANGES REQUIRED</div>
+          <div class="flow-box-description">The issue bounces back to "in-progress". The coder AI tries again with the feedback.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROLES SECTION -->
+    <h2 class="section-title">🧑‍💼 The Five AI Roles</h2>
+    <div class="role-section">
+      <div class="role-card">
+        <div class="role-card-header">🏗️ Architect</div>
+        <div class="role-card-content">
+          <strong>What they do:</strong>
+          <ul>
+            <li>Takes your brief</li>
+            <li>Asks smart questions</li>
+            <li>Writes the PLAN.md (master blueprint)</li>
+            <li>Breaks the project into phases and tasks</li>
+            <li>Hands off to the team</li>
+          </ul>
+          <strong>Runs on:</strong> Claude Code (Windows)<br>
+          <strong>Timing:</strong> Once, at the start of a project
+        </div>
+      </div>
+
+      <div class="role-card">
+        <div class="role-card-header">📋 Orchestrator</div>
+        <div class="role-card-content">
+          <strong>What they do:</strong>
+          <ul>
+            <li>Reads PLAN.md and creates issues</li>
+            <li>Routes work to the right AI</li>
+            <li>Moves tasks through the pipeline</li>
+            <li>Watches for stuck issues</li>
+            <li>Routes CTO verdicts</li>
+            <li>Auto-merges when safe</li>
+          </ul>
+          <strong>Runs on:</strong> Hermes (WSL)<br>
+          <strong>Timing:</strong> Every 5 minutes
+        </div>
+      </div>
+
+      <div class="role-card">
+        <div class="role-card-header">💻 Coder</div>
+        <div class="role-card-content">
+          <strong>What they do:</strong>
+          <ul>
+            <li>Picks up assigned issues</li>
+            <li>Writes code or docs</li>
+            <li>Makes commits</li>
+            <li>Opens pull requests</li>
+            <li>Responds to feedback</li>
+          </ul>
+          <strong>Runs on:</strong> Hermes & Claude Code (both)<br>
+          <strong>Timing:</strong> Every 5 minutes (continuous)
+        </div>
+      </div>
+
+      <div class="role-card">
+        <div class="role-card-header">✅ CTO (Reviewer)</div>
+        <div class="role-card-content">
+          <strong>What they do:</strong>
+          <ul>
+            <li>Reviews code changes</li>
+            <li>Checks test results (CI)</li>
+            <li>Verifies quality</li>
+            <li>Posts verdicts</li>
+            <li>Decides if human review needed</li>
+          </ul>
+          <strong>Runs on:</strong> Claude Code (Windows)<br>
+          <strong>Timing:</strong> When a PR is ready for review
+        </div>
+      </div>
+
+      <div class="role-card">
+        <div class="role-card-header">🔧 Mechanics Script</div>
+        <div class="role-card-content">
+          <strong>What it does:</strong>
+          <ul>
+            <li>Runs deterministic (reliable) operations</li>
+            <li>Promotes "backlog" → "ready"</li>
+            <li>Dispatches "ready" → "in-progress"</li>
+            <li>Closes issues for merged PRs</li>
+            <li>Creates CTO review issues</li>
+            <li>Routes verdicts</li>
+          </ul>
+          <strong>Runs on:</strong> Bash script in Hermes<br>
+          <strong>Timing:</strong> Before the orchestrator every tick
+        </div>
+      </div>
+    </div>
+
+    <!-- TIMELINE -->
+    <h2 class="section-title">⏱️ A Real Example: Start to Finish</h2>
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-marker">1</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 9 AM — You kick off a project</div>
+          <div class="timeline-content-description">You paste the Architect prompt into Claude Desktop with your project brief. You answer 5 questions. You approve PLAN.md.</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">2</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 9:15 AM — Orchestrator reads the plan</div>
+          <div class="timeline-content-description">Next tick, Hermes Orchestrator reads the PLAN and creates 12 GitHub issues (one per task). Labels them all "backlog".</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">3</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 9:20 AM — First issues promoted</div>
+          <div class="timeline-content-description">Issues with no dependencies are promoted to "ready". The orchestrator dispatcher moves them to "in-progress". Hermes Coder and Claude Code see the work.</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">4</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 10 AM — First PR ready for review</div>
+          <div class="timeline-content-description">Hermes Coder finishes the first task, opens a PR. Orchestrator creates a CTO review issue. CTO AI reviews.</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">5</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 10:15 AM — PR auto-merged</div>
+          <div class="timeline-content-description">CTO approves with "HUMAN-REVIEW: NO". Orchestrator auto-merges. Issue closes. Dependent issues unlock.</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">6</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 11 AM — Second issue unlocked</div>
+          <div class="timeline-content-description">The next task (which depended on task 1) is now promoted to "ready" → "in-progress". Coder picks it up.</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">7</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 2 PM — A PR needs human approval</div>
+          <div class="timeline-content-description">CTO reviews task #7 and posts "APPROVED + HUMAN-REVIEW: YES". You get a Telegram message asking you to approve. You reply "1" to merge.</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">8</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 2:05 PM — Your approval merged</div>
+          <div class="timeline-content-description">Orchestrator sees your approval and merges the PR. Issue closes.</div>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-marker">9</div>
+        <div class="timeline-content">
+          <div class="timeline-content-title">Monday 3 PM — All tasks done</div>
+          <div class="timeline-content-description">All 12 issues are closed. All PRs are merged. Project complete. You can use the finished code immediately.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KEY FEATURES -->
+    <h2 class="section-title">✨ What Makes Max Agency Smart</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+      <div class="highlight-box">
+        <div class="highlight-box-title">🤖 Automatic Routing</div>
+        <div class="highlight-box-text">The right AI picks the right task. Complex planning goes to Claude Opus. Simple coding goes to Haiku. Quality review goes to CTO. You don't assign tasks — labels do it.</div>
+      </div>
+
+      <div class="highlight-box">
+        <div class="highlight-box-title">🔗 Smart Dependencies</div>
+        <div class="highlight-box-text">The Orchestrator won't start task B until task A is done. You define dependencies in PLAN.md, and the pipeline respects them automatically.</div>
+      </div>
+
+      <div class="highlight-box">
+        <div class="highlight-box-title">✅ Quality Gates</div>
+        <div class="highlight-box-text">Every PR gets reviewed by CTO AI before merge. Code tests (CI) are checked automatically. Bad code is caught before it gets merged.</div>
+      </div>
+
+      <div class="highlight-box">
+        <div class="highlight-box-title">📞 Human Loop</div>
+        <div class="highlight-box-text">For risky changes, the AI asks YOU for approval via Telegram. You say yes or no. Full automation where safe, human oversight where needed.</div>
+      </div>
+
+      <div class="highlight-box">
+        <div class="highlight-box-title">♻️ Auto-Retry on Feedback</div>
+        <div class="highlight-box-text">If CTO says "CHANGES REQUIRED", the issue bounces back to the coder. The coder reads the feedback and tries again. No human reminder needed.</div>
+      </div>
+
+      <div class="highlight-box">
+        <div class="highlight-box-title">📊 Always Visible</div>
+        <div class="highlight-box-text">GitHub is the scoreboard. Check GitHub anytime to see which tasks are done, which are in progress, and which are waiting.</div>
+      </div>
+    </div>
+
+    <!-- WHAT YOU DO -->
+    <h2 class="section-title">🎯 Your Job: What You Actually Do</h2>
+    <div style="background: #f0f7ff; border-left: 5px solid #2196F3; padding: 25px; border-radius: 8px; margin-bottom: 40px;">
+      <div style="color: #0c5aa0; line-height: 1.8; font-size: 1.05em;">
+        <p><strong>1. Describe what you want:</strong> Write a brief. "I want an app that tracks my reading." That's it.</p>
+        <p><strong>2. Answer 5 questions:</strong> The Architect AI asks clarifying questions. You answer them.</p>
+        <p><strong>3. Approve the plan:</strong> You read the PLAN.md and say "yes, this looks good" or "please change X".</p>
+        <p><strong>4. Check your phone:</strong> When something needs your eyes, Telegram pings you. You reply with "1 ✓" or "2 ✗".</p>
+        <p><strong>5. Monitor progress:</strong> Optionally watch GitHub as issues close. But honestly, it mostly works by itself.</p>
+        <p style="margin-top: 20px; font-weight: bold; color: #0c5aa0;">That's it. The AI handles the coding, reviewing, merging, and coordination.</p>
+      </div>
+    </div>
+
+    <!-- THE MAGIC SAUCE -->
+    <h2 class="section-title">🎩 The Magic: Why It Works</h2>
+    <div style="background: linear-gradient(135deg, #f5af19 0%, #f12711 100%); color: white; padding: 30px; border-radius: 12px; margin-bottom: 40px;">
+      <h3 style="margin-bottom: 20px; font-size: 1.3em;">Three Ideas Make Max Agency Possible</h3>
+
+      <div style="margin-bottom: 20px;">
+        <div style="font-size: 1.15em; font-weight: bold; margin-bottom: 8px;">1. GitHub is the Truth</div>
+        <div>Every AI reads GitHub issues and PRs to know what to do. GitHub is the single source of truth. If it's on GitHub, the AI knows about it.</div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <div style="font-size: 1.15em; font-weight: bold; margin-bottom: 8px;">2. Labels Route Work</div>
+        <div>Instead of a human assigning tasks, smart labels automatically tell the right AI to pick up the right task. "assigned:claude-opus" says "Claude Opus, this is for you".</div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <div style="font-size: 1.15em; font-weight: bold; margin-bottom: 8px;">3. The Orchestrator Conducts</div>
+        <div>A manager AI runs every 5 minutes. It promotes tasks, dispatches work, routes feedback, and auto-merges safe PRs. It's the conductor of the orchestra.</div>
+      </div>
+    </div>
+
+    <!-- SUMMARY -->
+    <h2 class="section-title">📝 In Summary</h2>
+    <div style="background: #ecf0f1; padding: 30px; border-radius: 12px; border-left: 5px solid #34495e;">
+      <div style="font-size: 1.05em; line-height: 2; color: #2c3e50;">
+        <p><strong>You describe what you want.</strong></p>
+        <p>→ <strong>Architect AI writes a detailed plan.</strong></p>
+        <p>→ <strong>Orchestrator breaks it into tasks.</strong></p>
+        <p>→ <strong>Coders pick tasks up and code them.</strong></p>
+        <p>→ <strong>CTO reviews each PR.</strong></p>
+        <p>→ <strong>Orchestrator auto-merges (or asks you).</strong></p>
+        <p>→ <strong>Next task unlocks. Repeat.</strong></p>
+        <p style="margin-top: 20px;"><strong>Your project is done. Code is tested. CI passes. Everything is merged and ready to use.</strong></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

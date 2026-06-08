@@ -422,6 +422,8 @@ OUTPUT CONTRACT:
 - Print script output verbatim.
 - Final line MUST be BOOTSTRAP_H2_COMPLETE (all steps pass) or BOOTSTRAP_H2_ABORT (any fail).
 - STOP immediately after the script exits.
+
+> **Note:** H2 registers Hermes built-in cron jobs (steps 4–5). These are stored inside Hermes but **do not fire automatically on this setup** — the real runtime is the **systemd user timers** deployed by `deploy.sh` (step A3b). The H2 cron registration exists only for environments where the Hermes gateway runs cron natively. After H2 completes, always run step A3b (`deploy.sh`) to activate the systemd timers.
 ```
 
 ### H3 (verify setup)
