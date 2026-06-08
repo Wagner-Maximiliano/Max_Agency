@@ -71,45 +71,6 @@ log "checking backlog for promotable tasks..."
 BACKLOG=$(gh_safe issue list --repo "$REPO" --label backlog --state open \
   --json number,body --limit 100)
 
-echo "$BACKLOG" | python3 - <<'PYEOF'
-import json, sys, subprocess, re
-
-issues = json.load(sys.stdin)
-repo = sys.argv[1] if len(sys.argv) > 1 else ""
-promoted = 0
-
-for issue in issues:
-    body = issue.get("body", "") or ""
-    m = re.search(r"Depends-on:\s*(.+)", body)
-    if not m:
-        continue
-    deps_raw = m.group(1).strip()
-    if deps_raw.lower() in ("none", ""):
-        dep_ids = []
-    else:
-        dep_ids = [int(x.strip().lstrip("#")) for x in deps_raw.split(",") if x.strip().lstrip("#").isdigit()]
-
-    all_closed = True
-    for dep in dep_ids:
-        state = subprocess.run(
-            ["gh", "issue", "view", str(dep), "--repo", repo, "--json", "state", "--jq", ".state"],
-            capture_output=True, text=True
-        ).stdout.strip()
-        if state.upper() != "CLOSED":
-            all_closed = False
-            break
-
-    if all_closed:
-        subprocess.run(["gh", "issue", "edit", str(issue["number"]), "--repo", repo,
-                        "--remove-label", "backlog", "--add-label", "ready"],
-                       capture_output=True)
-        print(f"  promoted #{issue['number']} backlog→ready", file=sys.stderr)
-        promoted += 1
-
-print(promoted)
-PYEOF
-) || true
-# parse promoted count from python output
 _py_promoted=$(echo "$BACKLOG" | python3 -c "
 import json, sys, subprocess, re
 issues = json.load(sys.stdin)
