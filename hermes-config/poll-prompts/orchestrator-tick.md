@@ -19,7 +19,11 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
    gh issue list --repo $PROJECT_REPO --label "kickoff" --state open --json number,title,body --limit 10
    ```
    For each kickoff issue:
-   a. Read `PLAN.md` from the local clone: `cat ~/.hermes-cache/$PROJECT_REPO/PLAN.md`.
+   a. **Immediately claim it** — before reading PLAN.md or creating any issues, run:
+      ```
+      gh issue edit <N> --repo $PROJECT_REPO --remove-label kickoff --add-label planned
+      ```
+      This is the mutex. If this tick dies mid-kickoff, the label is already gone so no second tick will re-process it. Then read `PLAN.md` from the local clone: `cat ~/.hermes-cache/$PROJECT_REPO/PLAN.md`.
    b. Parse the task table in PLAN.md. For each task row, create a GitHub issue:
       ```
       gh issue create --repo $PROJECT_REPO \
@@ -88,7 +92,7 @@ EOF
         3. Otherwise → `role:coder`
       Tasks with no unmet dependencies get `ready` instead of `backlog`.
    c. Post a comment on the kickoff issue listing all created issue numbers.
-   d. Remove the `kickoff` label and add `planned`.
+      (The `planned` label was already applied in step a — no further label change needed.)
 
    **Idempotency:** Before creating any issue, search for existing issues with the same `phase:N/task-id` prefix in their title (`gh issue list --search "<phase>/<task-id>:" --state all`). If one already exists, SKIP creation for that task — never duplicate.
 
