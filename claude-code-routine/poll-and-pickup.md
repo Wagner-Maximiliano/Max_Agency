@@ -58,7 +58,31 @@ Every coder tick MUST `cd` into the project repo before any git/file work. If th
      REASON: <one plain sentence a non-technical person can understand>
      ```
      or `VERDICT: CHANGES REQUIRED` / `VERDICT: ESCALATE` (see `agents/cto.md` for full format). **Do NOT close the CTO review issue** — leave it open so the Orchestrator can read the verdict and route it; the Orchestrator closes it. **Do not merge the PR** — the Orchestrator handles the merge (automatically for `HUMAN-REVIEW: NO`, or after human approval for `HUMAN-REVIEW: YES`). A red CI check is an automatic `VERDICT: CHANGES REQUIRED`.
-   - **Coder**: create branch `phase-<n>/<N>-<slug>` directly in the project repo clone (not a worktree — Windows worktrees add complexity; one branch per tick is enough). Edit files, commit incrementally with `phase-<n>/<N>: <subject>`, push, open PR with `Closes #<N>` in the body, move the task issue to `review` label.
+   - **Coder**:
+     1. **Check for an existing branch.** Run:
+        ```
+        gh api repos/$env:PROJECT_REPO/branches --jq '.[].name'
+        ```
+        Look for any branch matching `phase-<n>/<N>-*` where N is the issue number.
+        - If one exists: `git fetch origin && git checkout <existing-branch>`. Do NOT create a new branch.
+        - If none exists: create `phase-<n>/<N>-<slug>` from main. Use `git checkout main && git pull --rebase && git checkout -b phase-<n>/<N>-<slug>` — do NOT use worktrees (Windows worktrees add complexity; one branch per tick is enough).
+     2. **Read ALL issue comments** before writing any code:
+        ```
+        gh issue view <N> --repo $env:PROJECT_REPO --comments
+        ```
+        If any comment contains `VERDICT: CHANGES REQUIRED`, extract every numbered item from the list and address ALL of them — not just the examples explicitly called out. Apply the fix pattern globally to all affected content, not just the named instances.
+     3. **Make the changes.** Edit files, commit incrementally with message `phase-<n>/<N>: <subject>`.
+     4. **Push.** `git push origin <branch-name>`.
+     5. **Open or update a PR.** Check if an open PR exists for this branch:
+        ```
+        gh pr list --repo $env:PROJECT_REPO --head <branch-name> --state open --json number
+        ```
+        - If a PR exists: push has already updated it — do nothing else.
+        - If no PR exists: `gh pr create --title "phase-<n>/<N>: <slug>" --body "Closes #<N>" --repo $env:PROJECT_REPO`
+     6. **Label the task issue `review`** and remove `in-progress`:
+        ```
+        gh issue edit <N> --repo $env:PROJECT_REPO --add-label review --remove-label in-progress
+        ```
 10. **Exit**. Print one-line status (see Output below) and exit.
 
 ## Hard rules
@@ -69,6 +93,9 @@ Every coder tick MUST `cd` into the project repo before any git/file work. If th
 - **Never impersonate another role.** If you are running as `role:coder`, you do NOT post CTO verdicts or rewrite PLAN.md — even if it would be faster. Open an issue and let the proper role pick it up.
 - If anything is unclear, post a comment on the issue with the exact ambiguity and exit with status `BLOCKED`.
 - Never run longer than 20 minutes per tick. If you near the limit, commit WIP, comment on the issue, exit with status `TIMEOUT`.
+- **Never create a second branch for the same issue.** If `phase-<n>/<N>-*` exists on origin, use it.
+- **Never open a second PR for the same branch.** Check first with `gh pr list --head <branch> --state open`.
+- **Always read all issue comments before writing code.** CHANGES REQUIRED items must ALL be addressed — not just the named examples. Apply fixes globally across all affected content.
 
 ## Output
 

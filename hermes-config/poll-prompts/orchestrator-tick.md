@@ -27,10 +27,55 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
       gh issue create --repo $PROJECT_REPO \
         --title "<phase>/<task-id>: <task title>" \
         --body "$(cat <<EOF
-      <task description from PLAN.md>
+## What is this task? (For the human reading this)
+<Write 3–5 plain English sentences explaining: what is being built or changed, why it matters to the project, and what the result will look like. Use everyday language — no jargon. Imagine explaining to a curious 18-year-old who has never seen the codebase.>
 
-      Depends-on: #<comma-separated issue numbers of prerequisite tasks, or 'none'>
-      EOF
+## Acceptance Criteria
+<List every acceptance criterion from PLAN.md for this task. Then add any criteria that are implied by the task description but not explicitly listed. Every criterion must be independently verifiable without reading the code.>
+- [ ] <criterion>
+- [ ] <criterion>
+
+## Step-by-Step Instructions for the Agent
+<Provide exact, mechanical instructions. Include:
+- The exact file path(s) to create or edit
+- The exact content format required (e.g., "Each entry must be formatted as: ## Term\n<exactly 2 sentences>")
+- The exact shell commands to run to create files, verify output, run tests
+- Any format constraints stated in the PLAN.md or phase bible documents
+- How to verify each step succeeded before moving to the next>
+
+### Step 1 — Read context
+\`\`\`sh
+gh issue view <N> --repo \$PROJECT_REPO --comments
+cat ~/.hermes-cache/\$PROJECT_REPO/PLAN.md
+\`\`\`
+
+### Step 2 — Create / edit the file
+File to create/edit: \`<exact path>\`
+Required content format:
+<describe exactly what the content must look like — no inference required>
+
+### Step 3 — Verify
+\`\`\`sh
+<exact verification command — e.g., wc -l, grep, cat>
+\`\`\`
+Expected output: <what a passing result looks like>
+
+### Step 4 — Commit and push
+\`\`\`sh
+cd ~/.hermes-cache/\$PROJECT_REPO
+git add <file-path>
+git commit -m "<phase>/<N>: <short description>"
+git push origin <branch-name>
+\`\`\`
+
+## Definition of Done
+File \`<exact path>\` exists on the branch with the following measurable properties:
+- <specific measurable property — e.g., "exactly 10 entries", "each entry is 2 sentences">
+- <specific measurable property>
+CI passes (if applicable). PR is open with \`Closes #<N>\` in the body.
+
+Depends-on: #<comma-separated issue numbers of prerequisite tasks, or 'none'>
+EOF
       )" \
         --label "phase:<X>" \
         --label "assigned:<model-label>" \
