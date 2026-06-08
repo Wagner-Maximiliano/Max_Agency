@@ -27,6 +27,7 @@ if (-not $claudeCmd) { throw "Claude Code CLI 'claude' not found on PATH." }
 # assigned:claude-* label, and NO assignee (unclaimed). Mirrors the routine's
 # own selection in poll-and-pickup.md steps 1-3.
 $modelAlias = "sonnet"   # default if nothing claimable (routine will exit NO_WORK)
+$next = $null            # set inside try block if a claimable issue is found
 try {
   $raw = & gh issue list --repo $Repo --label "in-progress" --state open `
             --json number,labels,assignees --limit 50 2>$null | ConvertFrom-Json
@@ -59,5 +60,15 @@ $prompt = (Get-Content $PromptPath -Raw) `
 
 Set-Location $AgencyPath
 $env:PROJECT_REPO = $Repo
-$prompt | claude --model $modelAlias --print --dangerously-skip-permissions
-exit $LASTEXITCODE
+
+# Write output to a log file so the scheduled task runs silently in the background.
+$logDir = Join-Path $AgencyPath "logs"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+$logFile = Join-Path $logDir "claude-routine.log"
+$issueNum = if ($next) { $next.number } else { "none" }
+Add-Content -Path $logFile -Value "=== TICK $(Get-Date -Format 'u') | issue=$issueNum model=$modelAlias ===" -Encoding utf8
+
+$claudeOutput = $prompt | claude --model $modelAlias --print --dangerously-skip-permissions 2>&1
+$exitCode = $LASTEXITCODE
+Add-Content -Path $logFile -Value ($claudeOutput | Out-String).TrimEnd() -Encoding utf8
+exit $exitCode

@@ -10,6 +10,8 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
 
 ## Procedure (do exactly these steps, in order)
 
+0. **Pull latest agency config.** Run `git -C ~/.hermes-cache/Max_Agency pull --rebase 2>&1 || true`. This keeps agent specs and config files (AGENTS.md, poll templates, etc.) current for the duration of this tick. Non-fatal — if the pull fails, continue to step 1.
+
 1. **Heartbeat.** Run `date -u --iso-8601=seconds > ~/.hermes/profiles/orchestrator/heartbeat.txt`.
 
 2. **Pull latest state.** `cd` into the local clone of `$PROJECT_REPO` (path: `~/.hermes-cache/$PROJECT_REPO`). If it does not exist, clone it. Run `git pull --rebase`.

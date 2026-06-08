@@ -138,23 +138,38 @@ Paste **H1**, wait for `BOOTSTRAP_H1_COMPLETE`. Edit the first line of **H2** wi
 
 **Undo:** see "Teardown" below.
 
-### A3b — Set orchestrator turn budget
+### A3b — Patch the orchestrator service file
 
-The orchestrator service must use `--max-turns 20`. With the default of 10, steps 7.5–9 (CTO issue creation, verdict routing, auto-merge) are skipped each tick.
-
-If you re-install Hermes on WSL, patch the service file after H3 completes:
+After H3 completes, the Hermes-generated service file needs three patches: turn budget, timeout, and an improved ExecStart that (a) auto-pulls the agency config before each tick and (b) writes structured log output.
 
 ```bash
-# Set turn budget to 40 and raise service timeout to 20 min
+# 1. Set turn budget to 40 and service timeout to 20 min
 sed -i 's/--max-turns [0-9]*/--max-turns 40/' \
   ~/.config/systemd/user/hermes-orchestrator-tick.service
 sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=1200/' \
   ~/.config/systemd/user/hermes-orchestrator-tick.service
+
+# 2. Replace ExecStart with the improved version (cache pull + structured log)
+#    Reads the canonical ExecStart from the agency repo template
+python3 - << 'PYEOF'
+import re
+from pathlib import Path
+template = (Path.home() / '.hermes-cache/Max_Agency/hermes-config/hermes-orchestrator-tick.service').read_text()
+new_exec  = next(line for line in template.splitlines() if line.startswith('ExecStart='))
+svc       = Path.home() / '.config/systemd/user/hermes-orchestrator-tick.service'
+patched   = re.sub(r'^ExecStart=.*$', new_exec, svc.read_text(), flags=re.MULTILINE)
+svc.write_text(patched)
+print('ExecStart patched from agency template')
+PYEOF
+
 systemctl --user daemon-reload
 systemctl --user restart hermes-orchestrator-tick.timer
 ```
 
-**Check:** `grep max-turns ~/.config/systemd/user/hermes-orchestrator-tick.service` should show `--max-turns 20`.
+**Check:** `grep max-turns ~/.config/systemd/user/hermes-orchestrator-tick.service` should show `--max-turns 40`.
+
+> **Note:** If the agency repo has been updated since H1 ran, pull it first:
+> `git -C ~/.hermes-cache/Max_Agency pull --rebase`
 
 ---
 
@@ -478,6 +493,8 @@ rm -rf ~/.hermes-cache/Max_Agency
 | Cron not firing | WSL: `hermes -p orchestrator cron list`, check `hermes status`, see `~/.hermes/profiles/orchestrator/escalations.log`. |
 | Wrong project | Hermes: re-paste H2 with corrected repo. Windows: re-run `register-task.ps1`. |
 | Routine not picking up issues | Windows: `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine` → History. Verify `claude --version` and `gh auth status` both work. |
+| Claude Code scheduled task opens a visible terminal window | The task was registered with `LogonType Interactive`. Re-run `register-task.ps1` (now uses `S4U`) or run: `$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType S4U -RunLevel Limited; Set-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine" -Principal $p` |
+| Claude Code routine output not visible | Log is written to `<AgencyPath>\logs\claude-routine.log`. Each entry is prefixed `=== TICK <timestamp> \| issue=<N> model=<m> ===`. |
 | `register-task.ps1` fails with "positional parameter... GitHub" | PowerShell 5.1 encoding bug — the `.ps1` file has a non-ASCII character (em-dash). Re-pull the latest agency repo: `git pull`. |
 | Both runtimes grab one issue | Issue has two `assigned:*` labels. Fix to one, re-add `ready`. |
 | Hermes coder firing every minute but never picks work | Check the issue has all three: `in-progress` + `assigned:hermes-coder` + `role:coder`. Coder only handles `role:coder`. |

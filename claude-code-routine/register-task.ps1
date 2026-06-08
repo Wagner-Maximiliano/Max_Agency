@@ -14,14 +14,18 @@ if (-not (Test-Path $promptPath)) { throw "poll-and-pickup.md not found at $prom
 $runTickPath = Join-Path $PSScriptRoot "run-tick.ps1"
 if (-not (Test-Path $runTickPath)) { throw "run-tick.ps1 not found at $runTickPath" }
 
+$vbsPath = Join-Path $PSScriptRoot "run-tick.vbs"
+if (-not (Test-Path $vbsPath)) { throw "run-tick.vbs not found at $vbsPath" }
+
 $claudeCmd = (Get-Command claude -ErrorAction SilentlyContinue)
 if (-not $claudeCmd) { throw "Claude Code CLI 'claude' not found on PATH. Install from https://claude.ai/download" }
 
-# Launch via run-tick.ps1, which peeks the queue, picks the model from the
-# issue's assigned:claude-<model> label, and runs `claude --model <m> --print`.
+# Launch via wscript.exe + run-tick.vbs so the task runs with NO visible console window.
+# wscript.exe is a GUI host — it never creates a console window, and window-style 0
+# in the VBScript ensures the spawned PowerShell is also invisible.
 $action = New-ScheduledTaskAction `
-  -Execute "powershell.exe" `
-  -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runTickPath`" -Repo `"$Repo`" -AgencyPath `"$ProjectPath`""
+  -Execute "wscript.exe" `
+  -Argument "/nologo `"$vbsPath`" `"$runTickPath`" `"-Repo $Repo -AgencyPath $ProjectPath`""
 
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
   -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
