@@ -8,7 +8,7 @@ model:
   base_url: https://openrouter.ai/api/v1
   provider: openrouter
   api_mode: chat_completions
-  default: google/gemini-flash-1.5
+  default: openai/gpt-4o-mini
   max_tokens: 16384
 
 goals:
