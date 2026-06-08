@@ -46,7 +46,7 @@ The free nemotron model is too slow for reliable operation. The fix is to change
 ```bash
 wsl -u hermes -- nano ~/.hermes/profiles/orchestrator/config.yaml
 # Change: default: nvidia/nemotron-3-super-120b-a12b:free
-# To:     default: <new-model-id>
+# To:     default: minimax/minimax-m3
 ```
 
 **2. Repo template** (keeps setup script in sync):
