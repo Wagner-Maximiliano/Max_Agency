@@ -25,3 +25,7 @@ CODING_STANDARDS.md    Code rules every agent follows
 ## Public mirror
 
 This baseline is mirrored at **https://github.com/Wagner-Maximiliano/Max_Agency** so Hermes prompts can clone it during bootstrap.
+
+## License
+
+No LICENSE file is present yet — **all rights reserved until one is added**. This means you can read and fork the code for personal study, but cannot legally redistribute or use it in production without explicit permission. A license will be chosen and added in a future update.

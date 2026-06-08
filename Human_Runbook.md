@@ -1,5 +1,41 @@
 # Human Runbook — Max Agency
 
+> **Not yet done with setup? Start here.** `docs/How_Max_Agency_Works.pdf` is the illustrated walkthrough. This runbook is the step-by-step instructions.
+
+## Quick Start (first time)
+
+**Prerequisites — install these first:**
+
+| Tool | Install |
+|---|---|
+| Windows 11 + WSL2 | `wsl --install` in Admin PowerShell |
+| Claude Desktop + Claude Code CLI | https://claude.ai/download then `npm install -g @anthropic-ai/claude-code` |
+| Hermes | Follow Hermes install guide (provides `hermes` CLI in WSL) |
+| GitHub CLI | https://cli.github.com — then `gh auth login` |
+
+**Supported platform: Windows 11 + WSL2 only.** Mac/Linux is out of scope.
+
+**Then (first-time setup, 4 commands):**
+
+```powershell
+# 1. Clone the agency repo (Windows)
+git clone https://github.com/<your-github-username>/Max_Agency "$env:USERPROFILE\Github_Projects\Max_Agency"
+
+# 2. Bootstrap Hermes (WSL terminal — paste H1, H2, H3 from Section A3)
+hermes chat
+
+# 3. Deploy service files
+wsl -u hermes bash -c "bash ~/.hermes-cache/Max_Agency/hermes-config/deploy.sh"
+
+# 4. Register the Claude Code routine (Windows PowerShell)
+cd "$env:USERPROFILE\Github_Projects\Max_Agency\claude-code-routine"
+.\register-task.ps1 -Repo "<your-github-username>/your-project-repo" -ProjectPath "$env:USERPROFILE\Github_Projects\Max_Agency"
+```
+
+**To kick off a project:** paste the Architect prompt (Section C) into Claude Desktop, then the agents take over.
+
+---
+
 Two parts: **Reference** (how it works — read once, skip later) and **Instructions** (what to do — follow every time).
 
 ---
@@ -14,7 +50,7 @@ An autonomous multi-agent dev team coordinated through GitHub. You paste prompts
 
 | # | Name | Where | You touch it |
 |---|---|---|---|
-| 1 | **Agency repo** — the engine (prompts, skills, scripts) | Windows: `C:\Users\lobster\Github_Projects\Max_Agency` + GitHub mirror | Rarely — only to upgrade the agency |
+| 1 | **Agency repo** — the engine (prompts, skills, scripts) | Windows: `$env:USERPROFILE\Github_Projects\Max_Agency` (or wherever you cloned it) + GitHub mirror | Rarely — only to upgrade the agency |
 | 2 | **Hermes cache** — auto-pulled copy of the agency | WSL: `~/.hermes-cache/Max_Agency` | Never |
 | 3 | **Project repo** — one per project (PLAN, issues, code) | A new empty GitHub repo | Create it; then approve PRs |
 
@@ -98,9 +134,9 @@ Reply with a number:
 Windows PowerShell:
 
 ```powershell
-cd "C:\Users\lobster\Github_Projects\Max_Agency"
+cd "$env:USERPROFILE\Github_Projects\Max_Agency"
 git init -b main
-git remote add origin https://github.com/Wagner-Maximiliano/Max_Agency.git
+git remote add origin https://github.com/<your-github-username>/Max_Agency.git
 git add .; git commit -m "initial: max agency baseline"; git push -u origin main
 ```
 
@@ -212,9 +248,9 @@ gh auth status     # should show your account as active
 Windows PowerShell (fill in your project repo):
 
 ```powershell
-$env:PROJECT_REPO = "Wagner-Maximiliano/your-project-repo"
-cd "C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine"
-.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "C:\Users\lobster\Github_Projects\Max_Agency" -IntervalMinutes 5
+$env:PROJECT_REPO = "<your-github-username>/your-project-repo"
+cd "$env:USERPROFILE\Github_Projects\Max_Agency\claude-code-routine"
+.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "$env:USERPROFILE\Github_Projects\Max_Agency" -IntervalMinutes 5
 ```
 
 **Check:** `Get-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine"` shows the task.
@@ -237,9 +273,9 @@ WSL: edit the first line of **H2** to your new repo, paste it into `hermes chat`
 Windows PowerShell:
 
 ```powershell
-$env:PROJECT_REPO = "Wagner-Maximiliano/your-new-repo"
-cd "C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine"
-.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "C:\Users\lobster\Github_Projects\Max_Agency" -IntervalMinutes 5
+$env:PROJECT_REPO = "<your-github-username>/your-new-repo"
+cd "$env:USERPROFILE\Github_Projects\Max_Agency\claude-code-routine"
+.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "$env:USERPROFILE\Github_Projects\Max_Agency" -IntervalMinutes 5
 ```
 
 ### B4 — Kick off the Architect
@@ -256,7 +292,7 @@ Claude Code app, any directory: paste the **Architect kickoff** prompt with your
 You are bootstrapping the Max Agency on this machine. Follow these steps in order. Do NOT improvise. Do NOT skip steps. Print [OK] or [FAIL: <reason>] after each numbered step.
 
 CONSTANTS:
-- PUBLIC_REPO = https://github.com/Wagner-Maximiliano/Max_Agency
+- PUBLIC_REPO = https://github.com/<your-github-username>/Max_Agency
 - CACHE_DIR   = $HOME/.hermes-cache/Max_Agency
 - PROFILES    = orchestrator, coder
 

@@ -29,8 +29,8 @@ Claude Code only ever picks up issues with `assigned:claude-*`. Hermes coder onl
 
 ## Working directories (canonical)
 
-- **Agency repo** (this prompt + role files + docs + skills): `C:\Users\lobster\Github_Projects\Max_Agency` — the directory you started in. READ-ONLY for role/docs/skills lookups.
-- **Project repo** (where you DO the work): `$env:USERPROFILE\.hermes-cache\$env:PROJECT_REPO` (e.g. `C:\Users\lobster\.hermes-cache\Wagner-Maximiliano\Surviving_The_AI_World`). All commits, worktrees, file edits happen here.
+- **Agency repo** (this prompt + role files + docs + skills): the directory you started in (set by the launcher). READ-ONLY for role/docs/skills lookups.
+- **Project repo** (where you DO the work): `$env:USERPROFILE\.hermes-cache\$env:PROJECT_REPO`. All commits, worktrees, file edits happen here.
 
 Every coder tick MUST `cd` into the project repo before any git/file work. If the project repo dir does not exist, run `gh repo clone $env:PROJECT_REPO $env:USERPROFILE\.hermes-cache\$env:PROJECT_REPO` first.
 

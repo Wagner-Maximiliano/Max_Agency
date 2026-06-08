@@ -7,7 +7,6 @@ This project is managed under MDP: Massive Development Plan.
 - Status: live
 - Human Owner: Max
 - Project: Game_Automation
-- Repository path: `/mnt/c/Users/lobster/Github_Projects/Game_Automation`
 - Default branch observed: `master`
 - Project size tier: Large
 - Current board: `docs/KANBAN.md`
