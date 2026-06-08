@@ -10,15 +10,11 @@ Repo to operate on: read from environment variable `PROJECT_REPO` (format: `<own
 
 ## Procedure (do exactly these steps, in order)
 
-0. **Pull latest agency config.** Run `git -C ~/.hermes-cache/Max_Agency pull --rebase 2>&1 || true`. This keeps agent specs and config files (AGENTS.md, poll templates, etc.) current for the duration of this tick. Non-fatal — if the pull fails, continue to step 1.
-
 1. **Heartbeat.** Run `date -u --iso-8601=seconds > ~/.hermes/profiles/orchestrator/heartbeat.txt`.
 
 2. **Pull latest state.** `cd` into the local clone of `$PROJECT_REPO` (path: `~/.hermes-cache/$PROJECT_REPO`). If it does not exist, clone it. Run `git pull --rebase`.
 
-3. **Regenerate state (best-effort).** Try `powershell.exe scripts/rebuild-state.ps1 -Repo $PROJECT_REPO 2>&1 || echo "rebuild-state skipped (powershell unavailable)"`. If it succeeds and `State.md` changed, `git add State.md && git commit -m "state: refresh snapshot" && git push`. If it fails (no powershell, script missing, etc.), warn once via comment on the kickoff issue then continue — do NOT exit with TICK_FAIL. Subsequent steps do not depend on State.md.
-
-4. **Handle kickoff issues.** Run:
+3. **Handle kickoff issues.** Run:
    ```
    gh issue list --repo $PROJECT_REPO --label "kickoff" --state open --json number,title,body --limit 10
    ```
@@ -217,8 +213,7 @@ EOF
 
 - If any `gh` command returns a permission error (NOT a "no results" empty list) → emit `TICK_FAIL auth` and exit.
 - If `git` fails on push/pull → log and continue if possible; only exit if the local clone is unusable.
-- **Do NOT exit on step 3 (rebuild-state) failure** — it's best-effort.
-- If wall-clock exceeds 5 minutes → commit any WIP, emit `TICK_TIMEOUT`, exit. Exception: step 4 (kickoff) may take up to 3 minutes on its own — it runs first so the remaining budget still applies to steps 5-11.
+- If wall-clock exceeds 5 minutes → commit any WIP, emit `TICK_TIMEOUT`, exit. Exception: step 3 (kickoff) may take up to 3 minutes on its own — it runs first so the remaining budget still applies to steps 5-11.
 - Never run more than one tick concurrently. Hermes cron handles this via `MultipleInstances=IgnoreNew` semantics; do not work around it.
 
 ## Output contract
