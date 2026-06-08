@@ -326,8 +326,8 @@ for issue in issues:
                 print(f'  WARN: stale CTO review #{num} ({age_min:.0f} min old)', file=sys.stderr)
         continue
 
-    # Parse linked task issue
-    m = re.search(r'Linked task issue:\s*#(\d+)', body)
+    # Parse linked task issue — body may have markdown bold: **Linked task issue:** #N
+    m = re.search(r'Linked task issue:\*{0,2}\s*#(\d+)', body)
     task_num = m.group(1) if m else None
 
     # Parse linked PR number
