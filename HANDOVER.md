@@ -7,382 +7,142 @@
 
 ---
 
-## What happened in the previous sessions (brief summary)
+## What happened in this session
 
-Two prior sessions ran a live end-to-end test of the Max Agency autonomous pipeline. The full pipeline was confirmed working on one task (issue #10 — banned-phrases bug fix) but failed on a second task (issue #21 — GLOSSARY.md) due to two infrastructure bugs and two design gaps. All infrastructure bugs were fixed. The user decided to reset the stale issue/PR state and redesign the issue and PR body templates before restarting work.
+This session focused on production readiness: hermes-cache auto-pull, end-to-end verification, improved logging, and making the Windows scheduled task run silently.
+
+### Changes committed (commit `86ed86f`)
+
+| File | What changed |
+|------|-------------|
+| `hermes-config/poll-prompts/orchestrator-tick.md` | Step 0 added: pull Max_Agency cache at tick start |
+| `hermes-config/hermes-orchestrator-tick.service` | NEW — service file template in repo (ExecStart + TimeoutStartSec=1200) |
+| `claude-code-routine/run-tick.vbs` | NEW — wscript.exe launcher so Windows task runs with no visible console window |
+| `claude-code-routine/run-tick.ps1` | Output redirected to `logs/claude-routine.log` with tick headers |
+| `claude-code-routine/register-task.ps1` | Uses wscript.exe+run-tick.vbs as action; LogonType Interactive (window suppressed by vbs) |
+| `Human_Runbook.md` | A3b updated with new ExecStart patch steps; adds troubleshooting rows for window/log issues |
+
+### Live system changes (WSL service file)
+
+The `/home/hermes/.config/systemd/user/hermes-orchestrator-tick.service` ExecStart was updated to:
+```bash
+ExecStart=/bin/bash -c 'L=/home/hermes/.hermes/profiles/orchestrator/cron-output.log; echo "=== TICK $(date -Iseconds) ===" >> "$L"; git -C /home/hermes/.hermes-cache/Max_Agency pull --rebase 2>&1 | grep -v "^Already up to date" >> "$L" || true; /home/hermes/.local/bin/hermes -p orchestrator chat -m nvidia/nemotron-3-super-120b-a12b:free -q "$(cat /home/hermes/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" -Q --accept-hooks --yolo --max-turns 40 2>&1 | tail -5 >> "$L"'
+```
+
+This is the same ExecStart as the repo template. `systemctl --user daemon-reload` was run.
+
+### Windows scheduled task
+
+The `MaxAgency-ClaudeCodeRoutine` task was updated to use `wscript.exe` + `run-tick.vbs` as the launcher. It fires every 5 minutes and writes to `C:\Users\lobster\Github_Projects\Max_Agency\logs\claude-routine.log`.
 
 ---
 
-## Current state — what is already done
+## Current state — what is already working
 
-### Infrastructure (DO NOT re-fix these — they are working)
-
-| System | Fix applied | Status |
-|--------|-------------|--------|
-| `run-tick.ps1` line 62 | Added `--dangerously-skip-permissions` so Claude Code can perform git/file ops unattended | **COMMITTED to Max_Agency main** (commit `4d62611`) |
-| WSL Hermes orchestrator service | Changed `--max-turns 10` → `--max-turns 20` so all 11 orchestrator steps run | **LIVE in WSL service file only** — NOT committed to repo |
-| Windows Scheduled Task `MaxAgency-ClaudeCodeRoutine` | Confirmed present, fires every 5 min | Working |
-| WSL `hermes-orchestrator-tick.timer` | Confirmed present, fires every 5 min | Working |
-| OpenRouter/nemotron model | Configured in `~/.hermes/config.yaml` (global) only — profile configs have no `model:` key | Working |
-
-**Important:** The `--max-turns 20` change is only in the live WSL service file at  
-`~/.config/systemd/user/hermes-orchestrator-tick.service`. It was NOT committed to  
-`Max_Agency/hermes-config/`. The next session should either:
-- Document it in `Human_Runbook.md`, OR
-- Commit the canonical value to the service template in the repo  
-
-### Repo reset (Surviving_The_AI_World) — COMPLETE
-
-The following were closed/deleted in this session:
-- PRs #23, #26, #28 — all closed (stale rework attempts for issue #21)
-- Issues #21 (task) and #29 (CTO review) — both closed
-- Remote branches `phase-1/21-add-docs-glossary`, `phase-1/21-glossary`, `phase-1/21-add-glossary` — all deleted
-
-**Current state of `Wagner-Maximiliano/Surviving_The_AI_World`:**
-- Open issues: 0
-- Open PRs: 0
-- Branches: `main` only
-
-The only completed/merged work on `main` is from Phase 0 (repo bootstrap — all Phase 0 tasks done). Phase 1 has not been restarted.
+| System | State |
+|--------|-------|
+| `run-tick.ps1` line 62 | Has `--dangerously-skip-permissions` ✅ |
+| WSL Hermes orchestrator service | `--max-turns 40`, `TimeoutStartSec=1200` ✅ |
+| Windows Scheduled Task | Runs every 5 min via wscript.exe (no window), writes to log ✅ |
+| Per-profile model config | Both orchestrator and coder use nemotron:free via OpenRouter ✅ |
+| hermes-cache auto-pull | Service ExecStart pulls Max_Agency before each tick ✅ |
+| Issue body template | 4-section format committed ✅ |
+| Rework loop fix | `poll-and-pickup.md` coder checks existing branch, reads all comments ✅ |
 
 ---
 
-## Design gaps found — what broke and why
+## Critical path issue: hermes terminal sandbox
 
-### Gap 1: Rework creates a new branch instead of amending the existing one
+**Important for debugging:** The Hermes terminal toolset runs commands with `~` resolving to the **sandbox home** at `/home/hermes/.hermes/profiles/orchestrator/home/`, NOT the actual `/home/hermes/`. So:
 
-**What happened:** CTO issued `VERDICT: CHANGES REQUIRED` on issue #21 (GLOSSARY.md). The orchestrator correctly routed the verdict back to the task issue (removed assignee, re-labelled `in-progress`). However, the coder (`poll-and-pickup.md`) has no instruction to check for an existing branch. So on the next tick, haiku created a brand-new branch (`phase-1/21-glossary`, then `phase-1/21-add-glossary`) and opened a new PR, leaving the prior PR open. After three rework loops, three open stale PRs accumulated.
-
-**Fix needed (in `poll-and-pickup.md`):** Coder step 9 must be updated with these rules:
-1. Before creating a branch, check `gh api repos/$env:PROJECT_REPO/branches` for any existing `phase-<n>/<N>-*` branch.
-2. If one exists, check it out and commit amendments to it — do NOT create a new branch.
-3. Before opening a PR, check if an open PR already exists for that branch: `gh pr list --repo $PROJECT_REPO --head <branch-name> --state open`. If one exists, push to it rather than opening a new one. Only close a stale PR if there is already a different open PR for the same issue.
-4. Read ALL comments on the issue before starting work — especially any `VERDICT: CHANGES REQUIRED` blocks posted by the CTO. Every numbered item in the CHANGES REQUIRED list must be addressed before pushing.
-
-### Gap 2: Issues and PRs have too little information for a low-reasoning model
-
-**What happened:** The GLOSSARY.md task issue body contained only the brief description from PLAN.md and a `Depends-on:` line. When the CTO issued CHANGES REQUIRED (e.g., "8 of 10 entries contain 3 sentences — all must be exactly 2"), haiku fixed only the two explicitly named entries, not the other 8. Because the original issue had no exhaustive step-by-step spec, haiku had to infer the pattern — and inferred wrong.
-
-**Fix needed:** See the template design section below.
-
-### Gap 3: `--max-turns 10` was too low for the orchestrator
-
-**What happened:** The orchestrator consumed all 10 turns on steps 1–7 and logged `"Steps 7.5–9 not executed this tick; will resume next tick."` Steps 7.5–9 are what creates CTO review issues and handles verdicts. With 10 turns, the orchestrator could never close the loop.
-
-**Fix already applied:** Changed to `--max-turns 20` in the live WSL service. Confirmed working — orchestrator now completes all 11 steps in a single tick.
-
-### Gap 4: `--dangerously-skip-permissions` was missing from `run-tick.ps1`
-
-**What happened:** Every Claude Code coder tick was posting a "Permission blocker: Unable to create branch or edit files in project repo" comment and exiting with no work done.
-
-**Fix already applied:** Added `--dangerously-skip-permissions` to `run-tick.ps1` line 62. Committed to Max_Agency main.
+- `~/.hermes-cache/` in tool calls → `/home/hermes/.hermes/profiles/orchestrator/home/.hermes-cache/`
+- The PROJECT_REPO clone lives at: `~/.hermes/profiles/orchestrator/home/.hermes-cache/Wagner-Maximiliano/Surviving_The_AI_World/` ✅ (correct)
+- `~/.hermes-cache/Max_Agency/` does NOT exist in the sandbox — step 0 in orchestrator-tick.md fails silently (non-fatal, `|| true`)
+- The ExecStart git pull uses absolute path `/home/hermes/.hermes-cache/Max_Agency/` (correct)
 
 ---
 
-## User's requirements for the new issue/PR template
+## Current state of Surviving_The_AI_World
 
-The user stated (verbatim, cleaned up for readability):
+As of 2026-06-08 ~11:53 CEST:
 
-> "I want to have more information. The PRs and Issues must have the exact steps that need to be followed by the model so that we can actually trust that a low-end model will be able to carry out the work without the need for a high reasoning model. This will also reduce errors. It is also important to explain in simple terms too — the Human needs to be able to understand, so maybe a small section at the beginning of the body with a summary in a language as if it is speaking to an 18-year-old, that the human can quickly read and understand exactly what that task is about, why and how it is done."
+### Open issues
+- **#30** `phase:1, assigned:claude-haiku, role:coder` — no state label — GLOSSARY task in limbo (should be `in-progress` after orchestrator routes CHANGES REQUIRED from #32)
+- **#32** `in-progress, assigned:claude-opus, role:cto` — CTO review for PR #31 — has `VERDICT: CHANGES REQUIRED` comment — orchestrator should route and close
+- **#33, #39** `0/0.1: Repo skeleton` — duplicated (orchestrator created same task twice)
+- **#34, #40** `0/0.2: Pandoc` — duplicated
+- **#35, #41** `0/0.3: Vale styles` — duplicated
+- **#36, #42** `0/0.4: GitHub Actions` — duplicated
+- **#37, #43** `0/0.5: Pre-commit hooks` — duplicated
+- **#38, #44** `review` — README+CONTRIBUTING — PRs #45, #46 open (also duplicated)
 
-### Derived template structure (4 sections, required in every issue body)
+### Open PRs
+- **#31**: `phase-1/30-glossary` — CHANGES REQUIRED (trailing newline + Vale CI fix)
+- **#45**: `phase-0/38-readme-contributing`
+- **#46**: `phase-0/44-readme-contributing-manuscript`
 
-```
-## What is this task? (For the human reading this)
-<!-- Plain English, no jargon, as if explaining to an 18-year-old. 3–5 sentences max.
-     Answer: what are we building/changing? why does it matter? what will it look like when done? -->
-
-## Acceptance Criteria
-<!-- Exact, exhaustive checklist. Every item must be independently verifiable.
-     No item can be inferred — if it matters, spell it out. -->
-- [ ] <specific, measurable criterion>
-- [ ] <specific, measurable criterion>
-...
-
-## Step-by-Step Instructions for the Agent
-<!-- Exact shell commands, file paths, content requirements.
-     Written so a low-reasoning model (claude-haiku) can follow mechanically without inference.
-     Include: what file to create/edit, exactly what content it must contain, exact format rules,
-     exact commands to run, exact success checks. -->
-
-### Step 1 — <name>
-```sh
-<exact command>
-```
-Expected output: <what to check>
-
-### Step 2 — ...
-
-## Definition of Done
-<!-- Specific, verifiable endpoint.
-     Example: "File `docs/GLOSSARY.md` exists with exactly 10 entries.
-     Each entry is formatted as `## Term\n<exactly 2 sentences>`.
-     `wc -l docs/GLOSSARY.md` returns between 30 and 50 lines." -->
-```
+### Orchestrator tick in progress
+- Session `20260608_113834` started at 11:38 CEST, API call #20+ at 11:53 CEST
+- Expected to: route CHANGES REQUIRED from #32 → #30, dispatch Phase 0 tasks, handle new PRs
 
 ---
 
-## What the next session must implement
+## What the next session must do
 
-### Task A — Update `poll-and-pickup.md` (rework loop fix)
+### Priority 1 — Verify end-to-end routing closes
 
-File: `C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine\poll-and-pickup.md`
+After the 11:38 tick completes (~11:55-12:05 CEST), check:
+1. Is issue #32 closed?
+2. Does issue #30 now have `in-progress` label and no assignee?
+3. Does the cron-output.log show `TICK_OK`?
 
-Replace the current Coder section of step 9 with this expanded version:
+If issue #32 is NOT closed and #30 is still in limbo, the orchestrator's step 9 (verdict routing) may need debugging. In that case, manually close #32 and re-add `in-progress` to #30, then remove its assignee, and watch the next Claude Code tick pick up #30.
 
-```
-- **Coder**:
-  1. **Check for an existing branch.** Run:
-     `gh api repos/$env:PROJECT_REPO/branches --jq '.[].name'`
-     Look for any branch matching `phase-<n>/<N>-*` where N is the issue number.
-     - If one exists: `git fetch origin && git checkout <existing-branch>`. Do NOT create a new branch.
-     - If none exists: create `phase-<n>/<N>-<slug>` from main.
-  2. **Read ALL issue comments** before writing any code:
-     `gh issue view <N> --repo $env:PROJECT_REPO --comments`
-     If any comment contains `VERDICT: CHANGES REQUIRED`, extract every numbered item from the
-     list and address ALL of them — not just the examples explicitly called out.
-     Apply the fix pattern globally to all affected content, not just the named instances.
-  3. **Make the changes.** Edit files, commit incrementally with message `phase-<n>/<N>: <subject>`.
-  4. **Push.** `git push origin <branch-name>`.
-  5. **Open or update a PR.** Check if an open PR exists for this branch:
-     `gh pr list --repo $env:PROJECT_REPO --head <branch-name> --state open --json number`
-     - If a PR exists: push has already updated it — do nothing else.
-     - If no PR exists: `gh pr create --title "phase-<n>/<N>: <slug>" --body "Closes #<N>" --repo $env:PROJECT_REPO`
-  6. **Label the task issue `review`** and remove `in-progress`:
-     `gh issue edit <N> --repo $env:PROJECT_REPO --add-label review --remove-label in-progress`
-```
+### Priority 2 — Resolve duplicate Phase 0 issues
 
-Also add this to the Hard Rules section:
-```
-- **Never create a second branch for the same issue.** If `phase-<n>/<N>-*` exists on origin, use it.
-- **Never open a second PR for the same branch.** Check first.
-- **Always read all issue comments before writing code.** CHANGES REQUIRED items must ALL be addressed — not just the named examples. Apply fixes globally across all affected content.
-```
+Issues #33–#43 are duplicates of an earlier set (#39–#44 range). The orchestrator created them twice from the same PLAN.md task table. You need to:
+- Close the older duplicates (keep the lower-numbered ones) OR
+- Let the orchestrator handle them (its idempotency check should prevent further duplication)
 
-### Task B — Update `orchestrator-tick.md` step 4b (issue creation body template)
+Consider adding a `kickoff-handled` idempotency guard so this can't happen again.
 
-File: `C:\Users\lobster\Github_Projects\Max_Agency\hermes-config\poll-prompts\orchestrator-tick.md`
+### Priority 3 — Monitor GLOSSARY rework
 
-Replace the `--body` block in step 4b with the new 4-section template. The orchestrator must populate each section from the PLAN.md task data. Here is the updated `--body` content:
+After issue #30 gets `in-progress`, the Claude Code routine should pick it up (haiku model). The new `poll-and-pickup.md` tells the coder to:
+1. Check for existing branch (`phase-1/30-glossary` exists)
+2. Read ALL comments (the CHANGES REQUIRED list from #32's comment)
+3. Fix: add trailing newline, fix Vale CI in `.github/workflows/book.yml`
+4. Push to existing branch (PR #31 auto-updates)
+5. Re-label as `review`
 
-```
-      --body "$(cat <<EOF
-## What is this task? (For the human reading this)
-<Write 3–5 plain English sentences explaining: what is being built or changed, why it matters to the book project, and what the result will look like. Use everyday language — no jargon. Imagine explaining to a curious 18-year-old who has never seen the codebase.>
+Watch that this rework cycle closes cleanly.
 
-## Acceptance Criteria
-<List every acceptance criterion from PLAN.md for this task. Then add any criteria that are implied by the task description but not explicitly listed. Every criterion must be independently verifiable without reading the code.>
-- [ ] <criterion>
-- [ ] <criterion>
+### Priority 4 — jq installation in WSL
 
-## Step-by-Step Instructions for the Agent
-<Provide exact, mechanical instructions. Include:
-- The exact file path(s) to create or edit
-- The exact content format required (e.g., "Each entry must be formatted as: ## Term\n<exactly 2 sentences>")
-- The exact shell commands to run to create files, verify output, run tests
-- Any format constraints stated in the PLAN.md or phase bible documents
-- How to verify each step succeeded before moving to the next>
-
-### Step 1 — Read context
-\`\`\`sh
-gh issue view <N> --repo $PROJECT_REPO --comments
-cat ~/.hermes-cache/$PROJECT_REPO/PLAN.md
-# Also read the relevant bible document if one exists for this task:
-# cat ~/.hermes-cache/$PROJECT_REPO/bible/<relevant-doc>.md
-\`\`\`
-
-### Step 2 — Create / edit the file
-File to create/edit: \`<exact path>\`
-Required content format:
-<describe exactly what the content must look like — no inference required>
-
-### Step 3 — Verify
-\`\`\`sh
-<exact verification command — e.g., wc -l, grep, cat>
-\`\`\`
-Expected output: <what a passing result looks like>
-
-### Step 4 — Commit and push
-\`\`\`sh
-cd ~/.hermes-cache/$PROJECT_REPO
-git add <file-path>
-git commit -m "phase-<n>/<N>: <short description>"
-git push origin <branch-name>
-\`\`\`
-
-## Definition of Done
-File \`<exact path>\` exists on the branch with the following measurable properties:
-- <specific measurable property — e.g., "exactly 10 entries", "each entry is 2 sentences">
-- <specific measurable property>
-CI passes (if applicable). PR is open with \`Closes #<N>\` in the body.
-
-Depends-on: #<comma-separated issue numbers, or 'none'>
-EOF
-      )"
+```bash
+wsl -u hermes -- bash -c "sudo apt-get install -y jq"
 ```
 
-**Important note for the orchestrator:** When populating the Step-by-Step Instructions section for a given task, the orchestrator must read the PLAN.md task description AND any relevant constraints (model roster, phase acceptance criteria, bible documents referenced). For Phase 1 tasks specifically, the bible documents in `bible/` don't exist yet — so the instructions must derive requirements purely from PLAN.md.
-
-### Task C — Re-create issue #21 (GLOSSARY.md) with the new template
-
-After Tasks A and B are committed, re-create the issue manually using the new template:
-
-**Title:** `phase-1/1.7: add docs/GLOSSARY.md — 10 key AI/tech terms`
-
-**Labels:** `phase:1`, `assigned:claude-haiku`, `role:coder`, `in-progress`
-
-**Body — fill in per template:**
-
-```markdown
-## What is this task? (For the human reading this)
-
-We are building a Glossary file — a short dictionary of 10 key words that appear in our AI survival book. Think of it like a mini-dictionary at the back of a textbook. Each word gets its own entry with a brief explanation. This glossary lives in a file called `docs/GLOSSARY.md` in the book's project folder. The goal is to help readers quickly look up any confusing AI or tech word without having to Google it. When this task is done, there will be a file with exactly 10 definitions, each written in exactly 2 clear sentences.
-
-## Acceptance Criteria
-
-- [ ] File `docs/GLOSSARY.md` exists on the branch
-- [ ] The file contains exactly 10 entries
-- [ ] Each entry uses this exact format: a level-2 heading (`## Term`) followed by exactly 2 sentences of explanation on the next line (no blank line between heading and sentences)
-- [ ] Every term relates to AI or technology relevant to the book's subject matter (surviving AI disruption)
-- [ ] Each explanation uses plain English accessible to a non-technical reader — no unexplained jargon inside the definition itself
-- [ ] The file starts with a top-level heading: `# Glossary`
-- [ ] No entry has fewer than 2 sentences and no entry has more than 2 sentences
-- [ ] Entries are sorted alphabetically by term name
-- [ ] The file ends with a newline character (no trailing blank lines)
-- [ ] PR is open with `Closes #<N>` in the body
-
-## Step-by-Step Instructions for the Agent
-
-### Step 1 — Read the issue and check for an existing branch
-```sh
-gh issue view <N> --repo $env:PROJECT_REPO --comments
-gh api repos/$env:PROJECT_REPO/branches --jq '.[].name' | grep "phase-1/<N>"
-```
-If a branch exists already, check it out. If not, create `phase-1/<N>-glossary` from main.
-
-### Step 2 — Navigate to the project repo and set up the branch
-```sh
-cd $env:USERPROFILE\.hermes-cache\Wagner-Maximiliano\Surviving_The_AI_World
-git fetch --all --prune
-git checkout main && git pull --rebase
-# Only if no existing branch:
-git checkout -b phase-1/<N>-glossary
-```
-
-### Step 3 — Create the file with exactly this structure
-
-Create file `docs/GLOSSARY.md`. The file MUST follow this exact pattern — apply it to ALL 10 entries without exception:
-
-```
-# Glossary
-
-## Artificial Intelligence
-Two sentences here. Second sentence here.
-
-## Automation
-Two sentences here. Second sentence here.
-
-## [Term 3]
-...
-```
-
-Rules that apply to EVERY entry (not just some):
-- Each entry is a `## ` heading (two hash symbols, one space, then the term)
-- After the heading comes exactly one blank line, then exactly 2 sentences on consecutive lines (or the same line — both are acceptable as long as there are exactly 2 sentences total)
-- Exactly 2 sentences means: count the periods (or `?` or `!`) that end sentences. There must be exactly 2 per entry. If you write 3, delete one. If you write 1, add another.
-- Alphabetical order: entries must be sorted A→Z by the first letter of the term
-- Plain English: define the term as if the reader has never heard of AI
-
-Suggested terms (you may adjust, but must end up with exactly 10):
-Algorithm, Artificial Intelligence, Automation, Bias (AI), Data, Large Language Model, Machine Learning, Neural Network, Parameter, Training Data
-
-### Step 4 — Verify the file
-
-```sh
-# Count entries (should output 10):
-grep -c "^## " docs/GLOSSARY.md
-
-# Check no entry has 3+ sentences (look for entries with 3 periods in a row of text):
-grep -A2 "^## " docs/GLOSSARY.md
-
-# View the full file to manually check format:
-cat docs/GLOSSARY.md
-```
-
-Expected: `grep -c "^## " docs/GLOSSARY.md` outputs `10`. Each entry block has exactly 2 sentences when you count the `.` characters.
-
-### Step 5 — Commit and push
-
-```sh
-git add docs/GLOSSARY.md
-git commit -m "phase-1/<N>: add docs/GLOSSARY.md with 10 key AI/tech terms"
-git push origin phase-1/<N>-glossary
-```
-
-### Step 6 — Open PR
-
-```sh
-gh pr create \
-  --repo Wagner-Maximiliano/Surviving_The_AI_World \
-  --title "phase-1/<N>: add docs/GLOSSARY.md with 10 key AI/tech terms" \
-  --body "Closes #<N>" \
-  --head phase-1/<N>-glossary \
-  --base main
-```
-
-### Step 7 — Label the issue as review
-
-```sh
-gh issue edit <N> --repo Wagner-Maximiliano/Surviving_The_AI_World \
-  --add-label review --remove-label in-progress
-```
-
-## Definition of Done
-
-File `docs/GLOSSARY.md` exists on branch `phase-1/<N>-glossary` with:
-- Exactly 10 entries (`grep -c "^## " docs/GLOSSARY.md` → `10`)
-- Every entry has exactly 2 sentences (count `.` per entry)
-- Alphabetical order (A before B before C…)
-- Starts with `# Glossary` heading
-- PR open with `Closes #<N>` in body
-- Task issue labelled `review`
-
-Depends-on: none
-```
-
-**Replace `<N>` with the actual issue number created by `gh issue create`.**
-
-### Task D — Document `--max-turns 20` in `Human_Runbook.md`
-
-File: Look for `C:\Users\lobster\Github_Projects\Max_Agency\Human_Runbook.md` or similar.
-
-Add a note in the WSL setup section:
-
-```markdown
-### Orchestrator turn budget
-
-The orchestrator service file must use `--max-turns 20` (not 10). With 10 turns,
-steps 7.5–9 (CTO issue creation, verdict routing, auto-merge) are skipped.
-
-If you re-install Hermes on WSL, run:
-```sh
-sed -i 's/--max-turns 10/--max-turns 20/' \
-  ~/.config/systemd/user/hermes-orchestrator-tick.service
-systemctl --user daemon-reload
-```
-```
+This prevents the orchestrator from wasting turns on `| jq '...'` pipe failures.
 
 ---
 
-## Commit order for next session
+## Monitoring commands
 
-1. Fix `poll-and-pickup.md` (Task A) → commit to Max_Agency main
-2. Fix `orchestrator-tick.md` step 4b (Task B) → commit to Max_Agency main
-3. Update `Human_Runbook.md` with `--max-turns 20` note (Task D) → commit to Max_Agency main
-4. Push all commits to origin
-5. Create issue #21 replacement with the new template (Task C) — do this manually via `gh issue create` so you can control the exact body
-6. Verify the orchestrator picks it up on the next tick and dispatches it
-7. Watch the coder tick: confirm it reads comments, uses the existing branch if present, and creates a properly formatted GLOSSARY.md
+```bash
+# Orchestrator log
+wsl -u hermes -- bash -c "tail -20 ~/.hermes/profiles/orchestrator/cron-output.log"
+
+# Live agent activity
+wsl -u hermes -- bash -c "tail -f ~/.hermes/profiles/orchestrator/logs/agent.log"
+
+# Claude Code routine log
+Get-Content C:\Users\lobster\Github_Projects\Max_Agency\logs\claude-routine.log -Tail 20
+
+# GitHub state
+gh issue list --repo Wagner-Maximiliano/Surviving_The_AI_World --state open --limit 20
+gh pr list --repo Wagner-Maximiliano/Surviving_The_AI_World --state open
+```
 
 ---
 
@@ -391,12 +151,19 @@ systemctl --user daemon-reload
 | What | Path |
 |------|------|
 | Claude Code routine launch script | `C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine\run-tick.ps1` |
+| Claude Code silent launcher | `C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine\run-tick.vbs` |
+| Claude Code routine log | `C:\Users\lobster\Github_Projects\Max_Agency\logs\claude-routine.log` |
 | Claude Code coder/CTO prompt | `C:\Users\lobster\Github_Projects\Max_Agency\claude-code-routine\poll-and-pickup.md` |
 | Orchestrator tick prompt | `C:\Users\lobster\Github_Projects\Max_Agency\hermes-config\poll-prompts\orchestrator-tick.md` |
 | Orchestrator systemd service (WSL) | `~/.config/systemd/user/hermes-orchestrator-tick.service` |
-| Hermes global model config (WSL) | `~/.hermes/config.yaml` |
-| Project repo local clone (Windows) | `C:\Users\lobster\.hermes-cache\Wagner-Maximiliano\Surviving_The_AI_World` |
-| Project repo on GitHub | `https://github.com/Wagner-Maximiliano/Surviving_The_AI_World` |
+| Hermes global config (WSL) | `~/.hermes/config.yaml` |
+| Orchestrator profile config (WSL) | `~/.hermes/profiles/orchestrator/config.yaml` |
+| Coder profile config (WSL) | `~/.hermes/profiles/coder/config.yaml` |
+| Max_Agency cache — actual home (WSL) | `/home/hermes/.hermes-cache/Max_Agency/` |
+| Max_Agency cache — sandbox home (WSL) | `/home/hermes/.hermes/profiles/orchestrator/home/.hermes-cache/` |
+| Project repo clone — sandbox (WSL) | `/home/hermes/.hermes/profiles/orchestrator/home/.hermes-cache/Wagner-Maximiliano/Surviving_The_AI_World/` |
+| Orchestrator cron log | `/home/hermes/.hermes/profiles/orchestrator/cron-output.log` |
+| Orchestrator heartbeat | `/home/hermes/.hermes/profiles/orchestrator/heartbeat.txt` |
 | Agency repo on Windows | `C:\Users\lobster\Github_Projects\Max_Agency` |
 
 ---
@@ -404,9 +171,9 @@ systemctl --user daemon-reload
 ## What NOT to touch
 
 - Do NOT re-apply the `--dangerously-skip-permissions` fix — it is already committed.
-- Do NOT re-create any of the closed issues/PRs (#21, #23, #26, #28, #29) — use `gh issue create` for a fresh issue.
-- Do NOT change the orchestrator model config — it inherits from `~/.hermes/config.yaml` and is working.
-- Do NOT modify the Windows Scheduled Task — it is working.
+- Do NOT change the orchestrator model config — it's in profile configs and working.
+- Do NOT re-create issues #30 or #32 — they need to be routed by the orchestrator.
+- Do NOT change the Windows Scheduled Task command line manually — use `register-task.ps1` to regenerate.
 
 ---
 

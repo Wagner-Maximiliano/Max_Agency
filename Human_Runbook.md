@@ -166,7 +166,7 @@ systemctl --user daemon-reload
 systemctl --user restart hermes-orchestrator-tick.timer
 ```
 
-**Check:** `grep max-turns ~/.config/systemd/user/hermes-orchestrator-tick.service` should show `--max-turns 40`.
+**Check:** `grep max-turns ~/.config/systemd/user/hermes-orchestrator-tick.service` should show `--max-turns 60`.
 
 > **Note:** If the agency repo has been updated since H1 ran, pull it first:
 > `git -C ~/.hermes-cache/Max_Agency pull --rebase`
