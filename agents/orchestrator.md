@@ -18,6 +18,23 @@ It exits with a JSON summary:
 
 If it exits non-zero: print `TICK_FAIL mechanics` and stop.
 
+## Step 1b — Simple doc updates after merges
+
+After the mechanics script runs, check the JSON output for any merges that occurred (the script logs `closed #N` for issues whose PRs just merged). For each such task:
+
+1. Read `docs/DOC_MANIFEST.md` from the project repo:
+   ```sh
+   cat ~/.hermes-cache/$PROJECT_REPO/docs/DOC_MANIFEST.md
+   ```
+2. Find the row for the merged task. If it lists a **simple** doc update (`[DOC:simple]`) that was flagged by the CTO in a CHANGES REQUIRED comment but not yet done, apply it now:
+   - Changelog entries: append to `CHANGELOG.md` in the project repo
+   - Status fields: update the relevant status line in the listed doc
+   - Commit with: `docs: post-merge update for task #N [DOC:simple]`
+3. If the row lists a **complex** update (`[DOC:complex]`), skip — the CTO must have required the coder to do it before merge. If it's somehow still missing, create a new `role:coder` issue titled `docs: update [doc path] for task #N` and label it `ready` + `assigned:<same model as the task>`.
+4. If `DOC_MANIFEST.md` does not exist: create a `role:architect` issue titled `docs: DOC_MANIFEST.md missing — add documentation manifest` labeled `ready` + `assigned:claude-opus`.
+
+If the mechanics script shows zero merges this tick, skip this step entirely.
+
 ## Step 2 — Handle kickoff issues (only if kickoffs > 0)
 
 If `kickoffs` is **0** → skip to Step 3.

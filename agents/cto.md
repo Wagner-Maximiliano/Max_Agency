@@ -23,6 +23,7 @@ Triggered when Architect submits `PLAN.md`. Verdict against the **Plan Acceptanc
 - [ ] Human goal restated and matches brief
 - [ ] No phase depends on a future invention not in the plan
 - [ ] Parallelisation opportunities identified (or absence justified)
+- [ ] `docs/DOC_MANIFEST.md` is present, covers every task, and correctly classifies each doc update as `simple` or `complex` (not left blank)
 
 ### 2. Merge review
 
@@ -34,6 +35,22 @@ Triggered when Orchestrator requests merge of a PR. Verdict against the **Merge 
 - [ ] No standards violations (sample 3 random files in the diff)
 - [ ] State snapshot regenerated and accurate
 - [ ] Rollback is documented and feasible
+- [ ] **Documentation check:** read `docs/DOC_MANIFEST.md` and find the row for this task. Verify:
+  - If the row says **simple** update (changelog, status, metadata): the PR must include it, or the coder must have done it in a prior commit on the branch. If missing → CHANGES REQUIRED.
+  - If the row says **complex** update (architecture, API, design explanation): the PR must include it. If missing → CHANGES REQUIRED. Do not defer complex doc work post-merge.
+  - If the row says **none**: no action needed.
+  - If `DOC_MANIFEST.md` does not exist: add it as a CHANGES REQUIRED item (Architect omitted it).
+
+### Documentation routing rule
+
+When you add a documentation-related item to CHANGES REQUIRED, classify it in the list:
+
+```
+3. [DOC:simple] Update CHANGELOG.md — add an entry for this task under the current version.
+4. [DOC:complex] Update docs/architecture.md — the new caching layer introduced here is not reflected.
+```
+
+The `[DOC:simple]` tag tells the Orchestrator it can verify this in the next tick without re-engaging the CTO. The `[DOC:complex]` tag means the coder must do it and the CTO must re-verify it in the next review round.
 
 ## Output contract
 
