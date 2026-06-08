@@ -1,42 +1,42 @@
-# Hermes Cron Jobs
+# Hermes Timers
 
-Exact commands to register the polling jobs for each profile. **H2 runs these automatically** — the human normally does not run them by hand.
+> **Note:** The real runtime is **systemd user timers**, not Hermes built-in cron. Profile-cron jobs registered by H2 are not auto-run by the Hermes gateway on this setup — the systemd timers (`hermes-orchestrator-tick.timer`, `hermes-coder-tick.timer`) are what actually fire the ticks every 5 minutes.
 
-`*/5 * * * *` = every 5 minutes (current setting). Change to `* * * * *` for every minute, but beware API quota burn.
+## Deploying the timers
 
-## Actual hermes cron syntax
-
-```
-hermes cron add SCHEDULE PROMPT_TEXT --name NAME --profile PROFILE
-```
-
-- `schedule` and `prompt` are **positional** (not flags)
-- No `--env`, `--prompt-file`, or `--timeout` flags exist
-- `PROJECT_REPO` is stored in `~/.hermes/.env` so all hermes processes can read it
-
-## Orchestrator — registers via H2
+After H3 completes (or after any agency repo update), run:
 
 ```bash
-hermes cron add '*/5 * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" \
-  --name "max-agency-orchestrator-tick" \
-  --profile orchestrator
+git -C ~/.hermes-cache/Max_Agency pull --rebase && \
+  bash ~/.hermes-cache/Max_Agency/hermes-config/deploy.sh
 ```
 
-## Coder — registers via H2
+`deploy.sh` copies the service and timer files to `~/.config/systemd/user/` and runs `systemctl --user daemon-reload`.
+
+## Checking timer status
 
 ```bash
-hermes cron add '*/5 * * * *' "$(cat ~/.hermes-cache/Max_Agency/hermes-config/poll-prompts/coder-tick.md)" \
-  --name "max-agency-coder-tick" \
-  --profile coder
+systemctl --user list-timers hermes-orchestrator-tick.timer hermes-coder-tick.timer
 ```
 
-## PROJECT_REPO env var
+## Logs
 
-H2 writes `PROJECT_REPO=<value>` to `~/.hermes/.env`. Hermes loads this file at startup, making it available to all cron ticks.
+```bash
+tail -f ~/.hermes/profiles/orchestrator/cron-output.log
+tail -f ~/.hermes/profiles/coder/cron-output.log
+```
 
-To update for a new project: re-run H2 with the new repo slug.
+## Mechanics script (orchestrator only)
 
-## Inspecting / removing
+The orchestrator tick calls `orchestrator-mechanics.sh` each run — this script handles all deterministic queue operations. To run it manually for debugging:
+
+```bash
+PROJECT_REPO=owner/repo bash ~/.hermes/profiles/orchestrator/orchestrator-mechanics.sh
+```
+
+## Hermes cron commands (reference — not used in production)
+
+H2 registers these cron jobs inside Hermes, but they are not the active runtime on this machine:
 
 ```bash
 # List jobs per profile
@@ -47,8 +47,4 @@ hermes -p coder cron list
 hermes cron remove <job_id>
 ```
 
-## Notes
-
-- H2 handles "remove if already exists" automatically before re-adding.
-- The `--profile` flag on `cron add` is different from `hermes -p PROFILE cron list`. Both work correctly.
-- Telegram vars (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_HOME_CHANNEL`) are already in `~/.hermes/.env` from Hermes setup — no extra action needed.
+`PROJECT_REPO` is stored in `~/.hermes/.env` and is read by all Hermes processes and by `orchestrator-mechanics.sh`.

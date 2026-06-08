@@ -138,38 +138,23 @@ Paste **H1**, wait for `BOOTSTRAP_H1_COMPLETE`. Edit the first line of **H2** wi
 
 **Undo:** see "Teardown" below.
 
-### A3b — Patch the orchestrator service file
+### A3b — Deploy the agency service files
 
-After H3 completes, the Hermes-generated service file needs three patches: turn budget, timeout, and an improved ExecStart that (a) auto-pulls the agency config before each tick and (b) writes structured log output.
+After H3 completes, run `deploy.sh` to copy the canonical service files and mechanics script from the agency repo to the live Hermes install:
 
 ```bash
-# 1. Set turn budget to 40 and service timeout to 20 min
-sed -i 's/--max-turns [0-9]*/--max-turns 40/' \
-  ~/.config/systemd/user/hermes-orchestrator-tick.service
-sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=1200/' \
-  ~/.config/systemd/user/hermes-orchestrator-tick.service
-
-# 2. Replace ExecStart with the improved version (cache pull + structured log)
-#    Reads the canonical ExecStart from the agency repo template
-python3 - << 'PYEOF'
-import re
-from pathlib import Path
-template = (Path.home() / '.hermes-cache/Max_Agency/hermes-config/hermes-orchestrator-tick.service').read_text()
-new_exec  = next(line for line in template.splitlines() if line.startswith('ExecStart='))
-svc       = Path.home() / '.config/systemd/user/hermes-orchestrator-tick.service'
-patched   = re.sub(r'^ExecStart=.*$', new_exec, svc.read_text(), flags=re.MULTILINE)
-svc.write_text(patched)
-print('ExecStart patched from agency template')
-PYEOF
-
-systemctl --user daemon-reload
-systemctl --user restart hermes-orchestrator-tick.timer
+git -C ~/.hermes-cache/Max_Agency pull --rebase && \
+  bash ~/.hermes-cache/Max_Agency/hermes-config/deploy.sh
 ```
 
-**Check:** `grep max-turns ~/.config/systemd/user/hermes-orchestrator-tick.service` should show `--max-turns 60`.
+`deploy.sh` copies `hermes-orchestrator-tick.service`, `hermes-coder-tick.service`, profile configs, and `orchestrator-mechanics.sh` to their live locations, then reloads systemd. Run it again any time the agency repo is updated.
 
-> **Note:** If the agency repo has been updated since H1 ran, pull it first:
-> `git -C ~/.hermes-cache/Max_Agency pull --rebase`
+**Check:** `grep max-turns ~/.config/systemd/user/hermes-orchestrator-tick.service` should show `--max-turns 10`.
+
+> **Key files deployed:**
+> - `hermes-config/orchestrator-mechanics.sh` — the deterministic queue manager (heartbeat, promote, dispatch, reclaim, CTO review creation, verdict routing). The orchestrator LLM calls this every tick.
+> - `hermes-config/hermes-orchestrator-tick.service` / `hermes-coder-tick.service` — systemd units that fire every 5 minutes.
+> - `hermes-config/deploy.sh` — re-run after any agency repo update.
 
 ---
 
@@ -501,8 +486,8 @@ rm -rf ~/.hermes-cache/Max_Agency
 | Claude Code routine logs `NO_WORK` even with open issues | Issue must have `assigned:claude-*` (haiku/sonnet/opus) AND a `role:*` label. Architect/CTO tasks need `role:architect`/`role:cto`. |
 | Orchestrator logs `TICK_FAIL step:missing-rebuild-state` | `powershell.exe` is unavailable in the WSL sandbox. The step is now best-effort and non-fatal — but if you see it repeatedly, run `scripts/rebuild-state.ps1` manually from Windows PowerShell occasionally to refresh State.md. |
 | Orchestrator logs `NO_REPO` | `~/.hermes/.env` missing `PROJECT_REPO=...`. WSL: `cat ~/.hermes/.env`, add the line if missing, then `systemctl --user restart hermes-orchestrator-tick.timer`. |
-| Orchestrator completes steps 1–7 but never creates CTO review issues or routes verdicts (steps 7.5–9 skipped) | Service file has too few turns. WSL: `sed -i 's/--max-turns [0-9]*/--max-turns 40/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. See § A3b. |
-| Orchestrator service killed mid-run (`Failed with result 'timeout'` in journalctl) | `TimeoutStartSec` too low. WSL: `sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=1200/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. |
+| Orchestrator steps 7.5–9 (close merged PRs, CTO review, verdict routing) not happening | These are handled by `orchestrator-mechanics.sh`, not the LLM. Run it manually to see the error: `PROJECT_REPO=owner/repo bash ~/.hermes/profiles/orchestrator/orchestrator-mechanics.sh`. Check stderr for Python tracebacks or `gh` auth errors. |
+| Orchestrator service killed mid-run (`Failed with result 'timeout'` in journalctl) | `TimeoutStartSec` too low. Re-run `deploy.sh` to restore the canonical value, or: `sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=300/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. |
 | Phase task issues never appear after kickoff | Issue #2 (or your kickoff issue) has the `kickoff` label removed but no child issues exist — the orchestrator's step 4 failed silently. Re-add the `kickoff` label and watch the next tick; idempotency check prevents duplicates. |
 | OpenRouter rate limits | WSL: get job ID from `hermes -p orchestrator cron list`, `hermes cron remove <id>`, re-run H2 (change `* * * * *` to `*/5 * * * *` in the prompt). |
 | Claude Code routine fails with `401 Invalid authentication credentials` | The Claude Code OAuth token expired (~30-day life). Run `claude /login` in a PowerShell window, sign in, done. The scheduled task picks up the fresh token next tick. |
