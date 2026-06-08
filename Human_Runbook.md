@@ -145,7 +145,10 @@ The orchestrator service must use `--max-turns 20`. With the default of 10, step
 If you re-install Hermes on WSL, patch the service file after H3 completes:
 
 ```bash
-sed -i 's/--max-turns 10/--max-turns 20/' \
+# Set turn budget to 40 and raise service timeout to 20 min
+sed -i 's/--max-turns [0-9]*/--max-turns 40/' \
+  ~/.config/systemd/user/hermes-orchestrator-tick.service
+sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=1200/' \
   ~/.config/systemd/user/hermes-orchestrator-tick.service
 systemctl --user daemon-reload
 systemctl --user restart hermes-orchestrator-tick.timer
@@ -481,7 +484,8 @@ rm -rf ~/.hermes-cache/Max_Agency
 | Claude Code routine logs `NO_WORK` even with open issues | Issue must have `assigned:claude-*` (haiku/sonnet/opus) AND a `role:*` label. Architect/CTO tasks need `role:architect`/`role:cto`. |
 | Orchestrator logs `TICK_FAIL step:missing-rebuild-state` | `powershell.exe` is unavailable in the WSL sandbox. The step is now best-effort and non-fatal — but if you see it repeatedly, run `scripts/rebuild-state.ps1` manually from Windows PowerShell occasionally to refresh State.md. |
 | Orchestrator logs `NO_REPO` | `~/.hermes/.env` missing `PROJECT_REPO=...`. WSL: `cat ~/.hermes/.env`, add the line if missing, then `systemctl --user restart hermes-orchestrator-tick.timer`. |
-| Orchestrator completes steps 1–7 but never creates CTO review issues or routes verdicts (steps 7.5–9 skipped) | Service file has `--max-turns 10` — not enough turns. WSL: `sed -i 's/--max-turns 10/--max-turns 20/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. See § A3b. |
+| Orchestrator completes steps 1–7 but never creates CTO review issues or routes verdicts (steps 7.5–9 skipped) | Service file has too few turns. WSL: `sed -i 's/--max-turns [0-9]*/--max-turns 40/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. See § A3b. |
+| Orchestrator service killed mid-run (`Failed with result 'timeout'` in journalctl) | `TimeoutStartSec` too low. WSL: `sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=1200/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. |
 | Phase task issues never appear after kickoff | Issue #2 (or your kickoff issue) has the `kickoff` label removed but no child issues exist — the orchestrator's step 4 failed silently. Re-add the `kickoff` label and watch the next tick; idempotency check prevents duplicates. |
 | OpenRouter rate limits | WSL: get job ID from `hermes -p orchestrator cron list`, `hermes cron remove <id>`, re-run H2 (change `* * * * *` to `*/5 * * * *` in the prompt). |
 | Claude Code routine fails with `401 Invalid authentication credentials` | The Claude Code OAuth token expired (~30-day life). Run `claude /login` in a PowerShell window, sign in, done. The scheduled task picks up the fresh token next tick. |
