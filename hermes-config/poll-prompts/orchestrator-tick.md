@@ -134,7 +134,9 @@ EOF
       gh issue list --repo $PROJECT_REPO --search "CTO review: PR #<N> in:title" --state all --json number,state,comments
       ```
       - If an **OPEN** one exists → SKIP (review in flight).
-      - If a **CLOSED** one exists **and** it carries a `VERDICT:` comment **or** the PR is already merged → SKIP (already reviewed/handled).
+      - If a **CLOSED** one exists with `VERDICT: APPROVED` comment **or** the PR is already merged → SKIP (already approved/handled).
+      - If a **CLOSED** one exists with `VERDICT: CHANGES REQUIRED` comment and the PR is still open → **Re-create** a fresh CTO review issue (changes were made after the verdict, a re-review is needed).
+      - If a **CLOSED** one exists with `VERDICT: ESCALATE` comment → SKIP (human is handling it).
       - If a **CLOSED** one exists with **no** `VERDICT:` comment and the PR is still open/unmerged → the prior review died without routing. **Re-create** a fresh CTO review issue (the old closed one is abandoned). This prevents a PR being stranded by a review tick that closed without a verdict.
       - If none exists → create one.
    e. If no CTO review issue exists, create one:
