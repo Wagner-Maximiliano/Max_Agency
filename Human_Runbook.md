@@ -457,9 +457,9 @@ You are the Architect of the Max Agency. Your role contract is at https://github
 Project brief:
 <one paragraph: goal, constraints, deadline if any>
 
-Target repo: <owner/repo>   (the empty repo you just created — the PROJECT repo, not the agency)
+Target repo: <owner/repo>   # Human Note: (the empty repo you just created — the PROJECT repo, not the agency)
 
-Begin your workflow. Ask up to 5 clarifying questions in one batched message, then produce PLAN.md and submit it for CTO review.
+Begin your workflow. Ask up to maximum 10  clarifying questions, one question at a time with multiple numbered choices to select from, then produce PLAN.md and submit it for CTO review.
 ```
 
 ---
