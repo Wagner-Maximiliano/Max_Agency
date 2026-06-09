@@ -9,17 +9,19 @@ Baseline scaffold for an autonomous multi-agent developers agency. Hermes hosts 
 ## Layout
 
 ```
-agents/                Role contracts (architect, cto, orchestrator, coder)
-docs/                  Laws, Policies, Protocols, Rules (MDP, AMA, ...)
-skills/                Reusable skills agents discover on demand
-hermes-config/         Hermes-native profile templates, cron jobs, poll prompts
-claude-code-routine/   Windows Task Scheduler routine for the Anthropic side
-templates/             PLAN.md / State.md skeletons
-scripts/               PowerShell helpers (state rebuild, project setup)
-.github/               Issue template, PR template, CI workflow
-Human_Runbook.md       The only human-facing doc
-Highlevel_Plan_V2.0.md Architecture
-CODING_STANDARDS.md    Code rules every agent follows
+agents/                              Role contracts (architect, cto, orchestrator, coder)
+docs/                                Laws, Policies, Protocols, Rules (MDP, AMA, ...)
+skills/                              Reusable skills agents discover on demand
+hermes-config/                       Hermes-native profile templates, systemd timers, mechanics script
+claude-code-routine/                 Windows Task Scheduler routine for the Anthropic side
+templates/                           PLAN.md / State.md skeletons
+scripts/                             PowerShell helpers (state rebuild, project setup)
+.github/                             Issue template, PR template, CI workflow
+Human_Runbook.md                     The only human-facing doc — setup, operation, troubleshooting
+Highlevel_Plan_V2.0.md               Canonical architecture reference
+CODING_STANDARDS.md                  Code rules every agent follows
+max-agency-flow-diagram.html         Visual explainer — how the system works
+max-agency-flow-diagram(Production).html  Visual quick-start — install steps + how it works
 ```
 
 ## Public mirror

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Max Agency — Get Started</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; line-height: 1.6; }
+
+    /* ── Hero ─────────────────────────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; text-align: center; padding: 60px 24px 50px;
+    }
+    .hero h1 { font-size: 2.8rem; font-weight: 800; margin-bottom: 12px; letter-spacing: -0.5px; }
+    .hero p  { font-size: 1.2rem; opacity: 0.92; max-width: 620px; margin: 0 auto 20px; }
+    .hero .badge {
+      display: inline-block; background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.4); border-radius: 20px;
+      padding: 6px 18px; font-size: 0.9rem; margin-top: 8px;
+    }
+
+    /* ── Sections ─────────────────────────────────────────────────────── */
+    .section { max-width: 1100px; margin: 0 auto; padding: 50px 24px; }
+    .section-title {
+      font-size: 1.7rem; font-weight: 700; margin-bottom: 8px; color: #1a1a2e;
+    }
+    .section-subtitle { color: #666; margin-bottom: 32px; font-size: 1rem; }
+    .divider { border: none; border-top: 2px solid #e8eaf0; margin: 8px 0 40px; }
+
+    /* ── Cards ────────────────────────────────────────────────────────── */
+    .card {
+      background: white; border-radius: 16px; padding: 28px 30px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.07); margin-bottom: 20px;
+    }
+    .card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
+
+    /* ── Grid layouts ─────────────────────────────────────────────────── */
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
+
+    /* ── Prerequisites table ──────────────────────────────────────────── */
+    .prereq-table { width: 100%; border-collapse: collapse; }
+    .prereq-table th {
+      background: #f5f6fa; text-align: left; padding: 12px 16px;
+      font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;
+      color: #666; border-bottom: 2px solid #e8eaf0;
+    }
+    .prereq-table td { padding: 14px 16px; border-bottom: 1px solid #f0f2f5; vertical-align: top; }
+    .prereq-table tr:last-child td { border-bottom: none; }
+    .prereq-table .tool-name { font-weight: 700; color: #1a1a2e; }
+    .prereq-table .tool-why  { color: #555; font-size: 0.95rem; }
+    .prereq-table .tool-get  { font-size: 0.88rem; }
+    .prereq-table code { background: #f0f2f5; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; }
+    .prereq-table a { color: #667eea; text-decoration: none; }
+    .prereq-table a:hover { text-decoration: underline; }
+
+    /* ── Architecture cards ───────────────────────────────────────────── */
+    .arch-card { border-radius: 16px; padding: 28px; color: white; }
+    .arch-hermes  { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .arch-github  { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: #1a3a2e; }
+    .arch-claude  { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: #0a2a3e; }
+    .arch-card h3 { font-size: 1.2rem; font-weight: 800; margin-bottom: 10px; }
+    .arch-card p  { font-size: 0.93rem; opacity: 0.92; margin-bottom: 12px; }
+    .arch-card ul { list-style: none; padding: 0; }
+    .arch-card li { padding: 4px 0; font-size: 0.9rem; opacity: 0.9; }
+    .arch-card li::before { content: "→ "; font-weight: 700; }
+
+    /* ── Step-by-step install ─────────────────────────────────────────── */
+    .step-container { counter-reset: step-counter; }
+    .step {
+      background: white; border-radius: 16px; padding: 32px 36px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.07); margin-bottom: 24px;
+      border-left: 5px solid #667eea; position: relative;
+    }
+    .step::before {
+      counter-increment: step-counter;
+      content: counter(step-counter);
+      position: absolute; left: -22px; top: 28px;
+      background: #667eea; color: white;
+      width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.1rem;
+    }
+    .step h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; color: #1a1a2e; }
+    .step .step-why { color: #666; font-size: 0.93rem; margin-bottom: 18px; }
+
+    /* ── Code blocks ──────────────────────────────────────────────────── */
+    .code-block {
+      background: #1a1a2e; color: #e8eaf0; border-radius: 10px;
+      padding: 18px 20px; margin: 12px 0; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: 0.875rem; line-height: 1.7; overflow-x: auto;
+      position: relative;
+    }
+    .code-block .comment { color: #6a7fa8; }
+    .var {
+      background: #ff8c42; color: #1a1a2e; font-weight: 700;
+      padding: 1px 6px; border-radius: 4px; font-family: monospace;
+    }
+    .code-label {
+      font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: #999; margin-bottom: 4px; margin-top: 14px;
+    }
+
+    /* ── Warning / callout boxes ──────────────────────────────────────── */
+    .callout {
+      border-radius: 10px; padding: 14px 18px; margin: 14px 0; font-size: 0.92rem;
+    }
+    .callout-warn {
+      background: #fff8e6; border-left: 4px solid #f6a623; color: #7a5000;
+    }
+    .callout-example {
+      background: #f0f8ff; border-left: 4px solid #4facfe; color: #0a3a5e;
+    }
+    .callout-tip {
+      background: #f0fff4; border-left: 4px solid #38f9d7; color: #0a3a2e;
+    }
+    .callout strong { font-weight: 700; }
+
+    /* ── Role cards ───────────────────────────────────────────────────── */
+    .role-card {
+      background: white; border-radius: 16px; padding: 24px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+      border-top: 4px solid #667eea;
+    }
+    .role-card.architect { border-top-color: #667eea; }
+    .role-card.orchestrator { border-top-color: #f5576c; }
+    .role-card.coder-h { border-top-color: #38f9d7; }
+    .role-card.cto { border-top-color: #f6a623; }
+    .role-card.mechanics { border-top-color: #a29bfe; }
+    .role-card h4 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+    .role-card .role-desc { font-size: 0.88rem; color: #555; line-height: 1.55; }
+    .role-card .role-badge {
+      display: inline-block; font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.4px;
+      padding: 2px 8px; border-radius: 12px; margin-bottom: 10px;
+    }
+    .badge-windows { background: #e8f0fe; color: #3c5ba9; }
+    .badge-wsl     { background: #fce8f3; color: #8e2a5e; }
+    .badge-auto    { background: #e8fff4; color: #0a6040; }
+
+    /* ── Workflow steps ───────────────────────────────────────────────── */
+    .workflow-row {
+      display: flex; gap: 0; flex-wrap: nowrap; align-items: stretch;
+      overflow-x: auto; padding-bottom: 8px;
+    }
+    .workflow-step {
+      flex: 1; min-width: 140px; background: white; border-radius: 12px;
+      padding: 20px 16px; text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+      margin: 0 6px; position: relative;
+    }
+    .workflow-step .wf-num {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white; font-weight: 800; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 10px;
+    }
+    .workflow-step h4 { font-size: 0.88rem; font-weight: 700; margin-bottom: 6px; }
+    .workflow-step p  { font-size: 0.78rem; color: #666; }
+    .workflow-arrow { display: flex; align-items: center; color: #aaa; font-size: 1.5rem; flex-shrink: 0; }
+
+    /* ── Daily duties ─────────────────────────────────────────────────── */
+    .duty { display: flex; gap: 16px; align-items: flex-start; padding: 18px 0; border-bottom: 1px solid #f0f2f5; }
+    .duty:last-child { border-bottom: none; }
+    .duty-icon { font-size: 2rem; flex-shrink: 0; }
+    .duty h4 { font-weight: 700; margin-bottom: 4px; }
+    .duty p  { font-size: 0.9rem; color: #555; }
+
+    /* ── Troubleshooting table ────────────────────────────────────────── */
+    .trouble-table { width: 100%; border-collapse: collapse; }
+    .trouble-table th {
+      background: #f5f6fa; text-align: left; padding: 12px 16px;
+      font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px;
+      color: #666; border-bottom: 2px solid #e8eaf0;
+    }
+    .trouble-table td { padding: 14px 16px; border-bottom: 1px solid #f0f2f5; font-size: 0.9rem; vertical-align: top; }
+    .trouble-table tr:last-child td { border-bottom: none; }
+    .trouble-table .symptom { font-weight: 600; color: #c0392b; }
+    .trouble-table code { background: #1a1a2e; color: #e8eaf0; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+
+    /* ── New project box ──────────────────────────────────────────────── */
+    .new-project-steps { counter-reset: np-counter; }
+    .np-step {
+      display: flex; gap: 18px; align-items: flex-start; padding: 16px 0;
+      border-bottom: 1px solid #f0f2f5;
+    }
+    .np-step:last-child { border-bottom: none; }
+    .np-num {
+      counter-increment: np-counter;
+      min-width: 32px; height: 32px; border-radius: 50%;
+      background: #667eea; color: white; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; flex-shrink: 0;
+    }
+    .np-step h4 { font-weight: 700; margin-bottom: 4px; font-size: 0.95rem; }
+    .np-step p  { font-size: 0.88rem; color: #555; }
+
+    /* ── Acronym legend ───────────────────────────────────────────────── */
+    .legend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    .legend-item { display: flex; gap: 10px; align-items: flex-start; }
+    .legend-term { font-weight: 700; color: #667eea; min-width: 70px; font-size: 0.88rem; }
+    .legend-def  { font-size: 0.88rem; color: #555; }
+
+    /* ── Footer ───────────────────────────────────────────────────────── */
+    .footer {
+      background: #1a1a2e; color: #aaa; text-align: center;
+      padding: 40px 24px; margin-top: 20px;
+    }
+    .footer a { color: #667eea; text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+    .footer p { margin: 6px 0; font-size: 0.9rem; }
+
+    /* ── Background banding ───────────────────────────────────────────── */
+    .bg-light { background: white; }
+    .bg-grey  { background: #f0f2f5; }
+  </style>
+</head>
+<body>
+
+<!-- ─── HERO ──────────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <h1>🤖 Max Agency</h1>
+  <p>The autonomous developer agency you set up once — then it plans, codes, reviews, and ships by itself.</p>
+  <div class="badge">⚡ Quick-Start Guide + Installation Steps</div>
+</div>
+
+<!-- ─── PREREQUISITES ─────────────────────────────────────────────────────── -->
+<div class="bg-light">
+<div class="section">
+  <div class="section-title">🛠️ What You'll Need First</div>
+  <div class="section-subtitle">Five tools to install before starting. Each one only needs to be set up once.</div>
+  <hr class="divider">
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <table class="prereq-table">
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Why you need it</th>
+          <th>How to get it</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tool-name">🪟 Windows 11 + WSL2</span></td>
+          <td><span class="tool-why">Runs both the Windows AI brain (Claude Code) and the Linux AI brain (Hermes) on the same machine</span></td>
+          <td class="tool-get">Open PowerShell as Admin, run: <code>wsl --install</code> — then restart</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">🧠 Claude Desktop + Claude Code CLI</span></td>
+          <td><span class="tool-why">The Windows AI brain — reads GitHub issues, writes code, posts CTO verdicts automatically</span></td>
+          <td class="tool-get"><a href="https://claude.ai/download" target="_blank">claude.ai/download</a> (Desktop)<br>Then in PowerShell: <code>npm install -g @anthropic-ai/claude-code</code></td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">🐍 Hermes</span></td>
+          <td><span class="tool-why">The Linux AI brain — runs as a background service in WSL, handles the Orchestrator and Coder roles</span></td>
+          <td class="tool-get">Follow the Hermes installation guide (installs into WSL)</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">🐙 GitHub CLI (<code>gh</code>)</span></td>
+          <td><span class="tool-why">Both brains talk to GitHub through this tool — creates issues, merges PRs, posts comments</span></td>
+          <td class="tool-get"><a href="https://cli.github.com" target="_blank">cli.github.com</a> — then run: <code>gh auth login</code></td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">🐙 GitHub Account + Repo</span></td>
+          <td><span class="tool-why">GitHub is the coordination bus — every task, verdict, and status update lives as a GitHub Issue or PR</span></td>
+          <td class="tool-get"><a href="https://github.com" target="_blank">github.com</a> (free account works)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ─── ARCHITECTURE ───────────────────────────────────────────────────────── -->
+<div class="bg-grey">
+<div class="section">
+  <div class="section-title">🏗️ How It Works — The Three Parts</div>
+  <div class="section-subtitle">Max Agency runs across three places that talk to each other automatically.</div>
+  <hr class="divider">
+  <div class="grid-3">
+    <div class="arch-card arch-hermes">
+      <h3>🐍 Hermes (Linux Brain)</h3>
+      <p>Runs inside WSL on your Windows machine. Wakes up every 5 minutes via systemd timers. Handles all the invisible coordination work.</p>
+      <ul>
+        <li>Orchestrator: dispatches tasks, routes verdicts</li>
+        <li>Coder: implements what the Architect planned</li>
+        <li>Writes to GitHub on every tick</li>
+        <li>Escalates to your phone when it needs you</li>
+      </ul>
+    </div>
+    <div class="arch-card arch-github">
+      <h3>🐙 GitHub (The Bulletin Board)</h3>
+      <p>Every task is a GitHub Issue. Every piece of code is a Pull Request. Labels route tasks between agents. Nothing is stored in memory.</p>
+      <ul>
+        <li>Issues = tasks in the queue</li>
+        <li>Labels = which AI picks it up</li>
+        <li>PRs = code ready for review</li>
+        <li>Comments = verdicts and status</li>
+      </ul>
+    </div>
+    <div class="arch-card arch-claude">
+      <h3>🧠 Claude Code (Windows Brain)</h3>
+      <p>Runs as a silent Windows Scheduled Task every 5 minutes. Uses the most capable Claude models for the high-stakes roles.</p>
+      <ul>
+        <li>Architect: turns your goal into a plan</li>
+        <li>CTO: reviews code before it merges</li>
+        <li>Uses GPT-4o / Claude Opus for reasoning</li>
+        <li>Runs completely in the background</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─── INSTALLATION ───────────────────────────────────────────────────────── -->
+<div class="bg-light">
+<div class="section">
+  <div class="section-title">📋 Installation — Step by Step</div>
+  <div class="section-subtitle">Six steps. You only do this once. Orange text = something you must change to match your own setup.</div>
+  <hr class="divider">
+
+  <div class="callout callout-warn">
+    <strong>⚠️ Before you begin:</strong> Everywhere you see <span class="var">&lt;text-like-this&gt;</span> in a command, replace it with your own value. The examples below each code block show you exactly what a filled-in command looks like.
+  </div>
+
+  <br>
+  <div class="step-container">
+
+    <!-- STEP 1 -->
+    <div class="step">
+      <h3>Push the Max Agency repo to your GitHub</h3>
+      <p class="step-why">Max Agency is a template — you host your own copy on GitHub so Hermes can pull the latest config whenever it starts. Run these commands from your Windows Terminal (or PowerShell) in the Max Agency folder.</p>
+
+      <div class="code-label">📂 Open a terminal and navigate to the Max Agency folder</div>
+      <div class="code-block">
+        cd <span class="var">&lt;path-to-Max_Agency&gt;</span><br>
+        git init -b main<br>
+        git remote add origin https://github.com/<span class="var">&lt;your-username&gt;</span>/Max_Agency.git<br>
+        git add .<br>
+        git commit -m "initial: max agency baseline"<br>
+        git push -u origin main
+      </div>
+
+      <div class="callout callout-example">
+        <strong>📌 Example (fill in your own values):</strong><br>
+        <code>cd C:\Users\Alice\Max_Agency</code><br>
+        <code>git remote add origin https://github.com/alice123/Max_Agency.git</code>
+      </div>
+
+      <div class="callout callout-tip">
+        <strong>💡 Tip:</strong> Create the empty GitHub repo first at <a href="https://github.com/new" target="_blank">github.com/new</a> — name it <code>Max_Agency</code>, keep it <strong>private</strong>, and don't add a README (you're pushing one already).
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step">
+      <h3>Create your project repo and set up labels</h3>
+      <p class="step-why">This is the repo Max Agency will actually build software in. It's separate from the Max Agency repo — think of Max Agency as the engine, and your project repo as the car it's building.</p>
+
+      <div class="code-label">🐙 Run in PowerShell (Windows Terminal)</div>
+      <div class="code-block">
+        <span class="comment"># Create the repo on GitHub</span><br>
+        gh repo create <span class="var">&lt;your-username&gt;</span>/<span class="var">&lt;your-project-repo&gt;</span> --private<br><br>
+        <span class="comment"># Set up the labels Max Agency uses to route tasks</span><br>
+        cd <span class="var">&lt;path-to-Max_Agency&gt;</span><br>
+        .\scripts\setup-project.ps1 -Repo "<span class="var">&lt;your-username&gt;</span>/<span class="var">&lt;your-project-repo&gt;</span>"
+      </div>
+
+      <div class="callout callout-example">
+        <strong>📌 Example:</strong><br>
+        <code>gh repo create alice123/my-saas-app --private</code><br>
+        <code>.\scripts\setup-project.ps1 -Repo "alice123/my-saas-app"</code>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>⚠️ Important:</strong> Remember this exact repo slug (<code>your-username/your-project-repo</code>) — you'll use it in Steps 3 and 5 too. It must match exactly, including capitalisation.
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step">
+      <h3>Bootstrap Hermes (the Linux brain)</h3>
+      <p class="step-why">Hermes needs to know about your project repo and create the right profile files. You do this by pasting three special prompts into a Hermes chat session in WSL. Think of it as a one-time onboarding conversation.</p>
+
+      <div class="code-label">🐧 Open a WSL terminal and start Hermes</div>
+      <div class="code-block">
+        hermes chat
+      </div>
+
+      <p style="margin: 14px 0 6px; font-size: 0.93rem;"><strong>Then paste these three prompts in order, waiting for each to complete before pasting the next:</strong></p>
+
+      <div class="code-label">Prompt H1 — copies profile files (paste this first)</div>
+      <div class="code-block" style="font-size: 0.8rem; max-height: 120px; overflow-y: auto;">
+        See <strong>Human_Runbook.md → Section H1</strong> for the full prompt text. It sets up the orchestrator and coder profiles.
+      </div>
+
+      <div class="code-label">Prompt H2 — registers your project repo (paste this second)</div>
+      <div class="code-block">
+        <span class="comment"># The VERY FIRST LINE of H2 must match your project repo:</span><br>
+        export PROJECT_REPO="<span class="var">&lt;your-username&gt;</span>/<span class="var">&lt;your-project-repo&gt;</span>"<br>
+        <span class="comment"># Then paste the rest of H2 from Human_Runbook.md → Section H2</span>
+      </div>
+
+      <div class="callout callout-example">
+        <strong>📌 Example first line of H2:</strong><br>
+        <code>export PROJECT_REPO="alice123/my-saas-app"</code>
+      </div>
+
+      <div class="code-label">Prompt H3 — verifies the setup (paste this third)</div>
+      <div class="code-block" style="font-size: 0.8rem;">
+        See <strong>Human_Runbook.md → Section H3</strong>. It runs 8 checks and prints BOOTSTRAP_COMPLETE when everything is correct.
+      </div>
+
+      <div class="callout callout-tip">
+        <strong>💡 Tip:</strong> The full H1, H2, and H3 prompts are long copy-paste blocks in <code>Human_Runbook.md</code>. Don't write them by hand — copy them exactly.
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step">
+      <h3>Deploy the systemd timers (the Hermes heartbeat)</h3>
+      <p class="step-why">Hermes runs on systemd timers — two background services that fire every 5 minutes. Without this step, Hermes is installed but sleeping. This pulls the latest config from GitHub and activates the timers.</p>
+
+      <div class="code-label">🐧 Run in WSL terminal</div>
+      <div class="code-block">
+        git -C ~/.hermes-cache/Max_Agency pull --rebase<br>
+        bash ~/.hermes-cache/Max_Agency/hermes-config/deploy.sh
+      </div>
+
+      <div class="callout callout-tip">
+        <strong>💡 What this does:</strong> Copies the profile configs and service files into the right places, then tells systemd to reload. After this, run <code>systemctl --user list-timers</code> in WSL — you should see <code>hermes-orchestrator-tick.timer</code> and <code>hermes-coder-tick.timer</code> with a "NEXT" time showing.
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>⚠️ Re-run this step</strong> any time you pull an update to Max Agency. It's safe to run as many times as you want.
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="step">
+      <h3>Register the Windows Claude Code routine</h3>
+      <p class="step-why">This creates a Windows Scheduled Task that runs Claude Code silently in the background every 5 minutes, checking GitHub for any CTO review or Architect work that needs the Windows AI brain.</p>
+
+      <div class="code-label">🪟 Run in PowerShell (Windows Terminal) — as your normal user, not Admin</div>
+      <div class="code-block">
+        cd "<span class="var">&lt;path-to-Max_Agency&gt;</span>\claude-code-routine"<br><br>
+        .\register-task.ps1 `<br>
+        &nbsp;&nbsp;-Repo "<span class="var">&lt;your-username&gt;</span>/<span class="var">&lt;your-project-repo&gt;</span>" `<br>
+        &nbsp;&nbsp;-ProjectPath "<span class="var">&lt;path-to-Max_Agency&gt;</span>"
+      </div>
+
+      <div class="callout callout-example">
+        <strong>📌 Example:</strong><br>
+        <code>cd "C:\Users\Alice\Max_Agency\claude-code-routine"</code><br>
+        <code>.\register-task.ps1 -Repo "alice123/my-saas-app" -ProjectPath "C:\Users\Alice\Max_Agency"</code>
+      </div>
+
+      <div class="callout callout-warn">
+        <strong>⚠️ The repo slug here must exactly match what you used in Step 3.</strong> If they differ, the Windows brain and the Linux brain will be managing different repos and nothing will connect.
+      </div>
+
+      <div class="callout callout-tip">
+        <strong>💡 Verify it worked:</strong> Open Windows Task Scheduler (search for it in the Start menu) → look for <strong>MaxAgency-ClaudeCodeRoutine</strong>. It should say "Ready" with a next run time. Or check the log: <code>Max_Agency\logs\claude-routine.log</code> — after 5 minutes you should see a TICK entry.
+      </div>
+    </div>
+
+    <!-- STEP 6 -->
+    <div class="step">
+      <h3>Fire the first kickoff — tell the Architect what to build</h3>
+      <p class="step-why">Everything is running. Now you give the system its first goal. Open Claude Desktop, start a new conversation, and paste the Architect kickoff prompt from the runbook — then describe what you want to build.</p>
+
+      <div class="code-label">🧠 Open Claude Desktop → New Conversation</div>
+      <div class="code-block" style="font-size: 0.82rem;">
+        Paste the <strong>Architect Kickoff Prompt</strong> from Human_Runbook.md → Section "Architect kickoff"<br><br>
+        Then add your project brief, for example:<br>
+        "Build a simple web app that lets users track their daily habits. Users can add habits, check them off each day, and see a streak count."
+      </div>
+
+      <div class="callout callout-tip">
+        <strong>💡 What happens next:</strong> The Architect asks you up to 5 clarifying questions, writes a <code>PLAN.md</code>, submits it to the CTO for review, then creates a kickoff GitHub issue. The Orchestrator (Hermes) picks up that issue on its next tick and creates all the task issues. From there — it runs itself. 🎉
+      </div>
+    </div>
+
+  </div><!-- /step-container -->
+</div>
+</div>
+
+<!-- ─── STARTING A NEW PROJECT ─────────────────────────────────────────────── -->
+<div class="bg-grey">
+<div class="section">
+  <div class="section-title">🚀 Starting a New Project</div>
+  <div class="section-subtitle">Already set up Max Agency? Starting a second (or third) project is just 4 steps — no reinstalling anything.</div>
+  <hr class="divider">
+  <div class="card">
+    <div class="new-project-steps">
+      <div class="np-step">
+        <div class="np-num"></div>
+        <div>
+          <h4>Create the new project repo on GitHub</h4>
+          <p><code style="background:#f0f2f5;padding:2px 8px;border-radius:4px;">gh repo create &lt;your-username&gt;/&lt;new-project-repo&gt; --private</code> — then run <code style="background:#f0f2f5;padding:2px 8px;border-radius:4px;">.\scripts\setup-project.ps1 -Repo "&lt;your-username&gt;/&lt;new-project-repo&gt;"</code> to create all the labels.</p>
+        </div>
+      </div>
+      <div class="np-step">
+        <div class="np-num"></div>
+        <div>
+          <h4>Re-run H2 in Hermes with the new repo slug</h4>
+          <p>Open WSL → <code style="background:#f0f2f5;padding:2px 8px;border-radius:4px;">hermes chat</code> → paste H2 with the first line changed to <code style="background:#f0f2f5;padding:2px 8px;border-radius:4px;">export PROJECT_REPO="your-username/new-project-repo"</code>. This updates <code>~/.hermes/.env</code> so the Linux brain targets the new repo.</p>
+        </div>
+      </div>
+      <div class="np-step">
+        <div class="np-num"></div>
+        <div>
+          <h4>Re-register the Windows Claude Code routine</h4>
+          <p>Run <code style="background:#f0f2f5;padding:2px 8px;border-radius:4px;">.\register-task.ps1 -Repo "&lt;your-username&gt;/&lt;new-project-repo&gt;" -ProjectPath "&lt;path-to-Max_Agency&gt;"</code> — the <code>-Force</code> flag is built-in, so it overwrites the old registration safely.</p>
+        </div>
+      </div>
+      <div class="np-step">
+        <div class="np-num"></div>
+        <div>
+          <h4>Paste the Architect kickoff prompt</h4>
+          <p>Open Claude Desktop → new conversation → paste the Architect kickoff prompt → describe what you want to build. The agency takes it from there.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─── WORKFLOW ───────────────────────────────────────────────────────────── -->
+<div class="bg-light">
+<div class="section">
+  <div class="section-title">⚙️ How Every Task Gets Done</div>
+  <div class="section-subtitle">Once started, this loop runs automatically, 24/7, every 5 minutes.</div>
+  <hr class="divider">
+  <div class="workflow-row">
+    <div class="workflow-step">
+      <div class="wf-num">1</div>
+      <h4>🎯 You Set the Goal</h4>
+      <p>Paste a brief to the Architect. It writes PLAN.md and creates task issues on GitHub.</p>
+    </div>
+    <div class="workflow-arrow">→</div>
+    <div class="workflow-step">
+      <div class="wf-num">2</div>
+      <h4>📋 Orchestrator Queues Tasks</h4>
+      <p>Reads PLAN.md, creates GitHub issues with labels, promotes them through the queue: backlog → ready → in-progress.</p>
+    </div>
+    <div class="workflow-arrow">→</div>
+    <div class="workflow-step">
+      <div class="wf-num">3</div>
+      <h4>💻 Coder Implements</h4>
+      <p>Picks up an in-progress issue, writes the code on a branch, opens a Pull Request, labels the issue "review".</p>
+    </div>
+    <div class="workflow-arrow">→</div>
+    <div class="workflow-step">
+      <div class="wf-num">4</div>
+      <h4>🔍 CTO Reviews</h4>
+      <p>Reads the PR diff, checks every acceptance criterion. Posts APPROVED or CHANGES REQUIRED.</p>
+    </div>
+    <div class="workflow-arrow">→</div>
+    <div class="workflow-step">
+      <div class="wf-num">5</div>
+      <h4>🚦 Orchestrator Routes</h4>
+      <p>APPROVED + no human needed → auto-merges. CHANGES REQUIRED → bounces back to coder. Needs your eyes → messages you.</p>
+    </div>
+    <div class="workflow-arrow">→</div>
+    <div class="workflow-step">
+      <div class="wf-num">6</div>
+      <h4>✅ Shipped</h4>
+      <p>PR merged, issue closed, next task dispatched. Repeat until the plan is done.</p>
+    </div>
+  </div>
+
+  <div style="margin-top: 24px;">
+    <div class="callout callout-warn">
+      <strong>🔄 CHANGES REQUIRED → Auto-Retry:</strong> If the CTO rejects the code, the verdict is automatically pasted onto the task issue and the coder picks it up again on the next tick. The loop runs up to 2 rounds before the CTO escalates to you.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─── ROLES ──────────────────────────────────────────────────────────────── -->
+<div class="bg-grey">
+<div class="section">
+  <div class="section-title">🎭 The Five AI Roles</div>
+  <div class="section-subtitle">Each role has exactly one job. They never step on each other's work.</div>
+  <hr class="divider">
+  <div class="grid-3">
+    <div class="role-card architect">
+      <div class="role-badge badge-windows">Windows (Claude Code)</div>
+      <h4>🏛️ Architect</h4>
+      <p class="role-desc">Turns your one-paragraph goal into a complete, machine-executable PLAN.md. Asks you up to 5 clarifying questions first, then hands the plan to the CTO for sign-off before any code is written.</p>
+    </div>
+    <div class="role-card orchestrator">
+      <div class="role-badge badge-wsl">WSL / Hermes</div>
+      <h4>🎼 Orchestrator</h4>
+      <p class="role-desc">The conductor. Reads PLAN.md, creates task issues, promotes them through the queue, dispatches them to the right AI, and routes CTO verdicts (auto-merge, bounce-back, or escalate).</p>
+    </div>
+    <div class="role-card coder-h">
+      <div class="role-badge badge-wsl">WSL / Hermes</div>
+      <h4>💻 Coder</h4>
+      <p class="role-desc">Implements the task. Creates a branch, writes the code, commits, pushes, opens a PR, and labels the issue "review". Never merges its own work — that goes to the CTO.</p>
+    </div>
+    <div class="role-card cto">
+      <div class="role-badge badge-windows">Windows (Claude Code)</div>
+      <h4>🔍 CTO</h4>
+      <p class="role-desc">Independent quality gate. Reads the PR diff against the acceptance criteria. Posts APPROVED (auto-merge if safe), CHANGES REQUIRED (bounce back), or ESCALATE (needs your eyes). Never touches the code itself.</p>
+    </div>
+    <div class="role-card mechanics">
+      <div class="role-badge badge-auto">Fully Automatic</div>
+      <h4>⚙️ Mechanics Script</h4>
+      <p class="role-desc">A deterministic bash+Python script that runs before every Orchestrator tick. Handles heartbeat, git pull, queue promotion, dispatch, stale reclaim, PR tracking, and verdict routing — no AI judgment needed.</p>
+    </div>
+  </div>
+
+  <div style="margin-top: 24px;">
+    <div class="callout callout-tip">
+      <strong>🛡️ Why the CTO is separate from the Coder:</strong> The CTO and Coder run on completely different AI instances and have read each other's code. The CTO has no incentive to approve bad work — it's structurally independent. This prevents the AI from approving its own mistakes.
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─── YOUR JOB ───────────────────────────────────────────────────────────── -->
+<div class="bg-light">
+<div class="section">
+  <div class="section-title">👤 What You Actually Do Day-to-Day</div>
+  <div class="section-subtitle">Mostly nothing. Max Agency is designed to run without you. Here's when it does need you:</div>
+  <hr class="divider">
+  <div class="card">
+    <div class="duty">
+      <div class="duty-icon">📱</div>
+      <div>
+        <h4>Reply to Telegram messages (the merge-approval flow)</h4>
+        <p>When the CTO flags a change as "needs human eyes" (UI changes, database changes, anything irreversible), it sends you a Telegram message with a link to the PR. Reply with <strong>1 = merge</strong>, <strong>2 = reject</strong>, or <strong>3 = explain</strong>. If you don't have Telegram set up, the message goes to a log file — check <code>~/.hermes/profiles/orchestrator/escalations.log</code> in WSL.</p>
+      </div>
+    </div>
+    <div class="duty">
+      <div class="duty-icon">👀</div>
+      <div>
+        <h4>Review the Architect's plan before work starts</h4>
+        <p>After the Architect and CTO agree on a plan, the Architect shows you PLAN.md and waits for a thumbs-up before creating any task issues. This is your one chance to redirect the project before AI effort is spent. It's a one-word reply: "Approved" or "Change X."</p>
+      </div>
+    </div>
+    <div class="duty">
+      <div class="duty-icon">🚨</div>
+      <div>
+        <h4>Handle escalations (rare)</h4>
+        <p>If the CTO rejects a task 2 times in a row and still can't approve it, or if the Architect can't figure out what you want, you'll get an escalation. It'll tell you exactly what's blocking progress and ask for a decision. These should be rare — usually less than one per project.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─── TROUBLESHOOTING ────────────────────────────────────────────────────── -->
+<div class="bg-grey">
+<div class="section">
+  <div class="section-title">🔧 Troubleshooting — Quick Reference</div>
+  <div class="section-subtitle">Something not moving? Start here before reading the full runbook.</div>
+  <hr class="divider">
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <table class="trouble-table">
+      <thead>
+        <tr>
+          <th>Symptom</th>
+          <th>Most Likely Cause</th>
+          <th>Fix</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="symptom">Nothing happening after setup</span></td>
+          <td>Systemd timers not active</td>
+          <td>In WSL, run: <code>systemctl --user list-timers</code> — both <code>hermes-orchestrator-tick.timer</code> and <code>hermes-coder-tick.timer</code> should show a "NEXT" time. If not, re-run deploy.sh (Step 4).</td>
+        </tr>
+        <tr>
+          <td><span class="symptom">Windows log only shows "NO_WORK" every 5 min</span></td>
+          <td>Repo slug mismatch between Windows and WSL</td>
+          <td>Check that <code>~/.hermes/.env</code> in WSL has <code>PROJECT_REPO=your-username/your-repo</code> and that <code>register-task.ps1</code> was run with the same slug. They must be identical.</td>
+        </tr>
+        <tr>
+          <td><span class="symptom">CTO verdict posted but PR wasn't merged</span></td>
+          <td>Orchestrator hasn't ticked yet since verdict</td>
+          <td>Run mechanics manually in WSL: <code>PROJECT_REPO=owner/repo bash ~/.hermes/profiles/orchestrator/orchestrator-mechanics.sh</code></td>
+        </tr>
+        <tr>
+          <td><span class="symptom">CTO review issue sitting open with no verdict</span></td>
+          <td>Windows Claude Code missed the tick (process was already running)</td>
+          <td>Check <code>Max_Agency\logs\claude-routine.log</code> — look for the tick that matches the issue number. If missing, wait for the next 5-min tick or re-run <code>run-tick.ps1</code> manually.</td>
+        </tr>
+        <tr>
+          <td><span class="symptom">Task stays "in-progress" forever with no branch</span></td>
+          <td>Coder timed out or crashed; stale claim</td>
+          <td>The Orchestrator will auto-reclaim it within 60 minutes and re-dispatch. To reclaim immediately, run the mechanics script manually.</td>
+        </tr>
+        <tr>
+          <td><span class="symptom">Architect keeps asking questions I've already answered</span></td>
+          <td>New Claude Code session, no memory of prior chat</td>
+          <td>Paste your previous answers again, or include them in the kickoff brief. Claude Code has no memory between sessions — the brief must be self-contained.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div style="margin-top: 20px;" class="callout callout-tip">
+    <strong>📖 Full troubleshooting guide:</strong> <code>Human_Runbook.md</code> contains 30+ troubleshooting scenarios with exact commands and expected outputs. Open it any time you hit a wall.
+  </div>
+</div>
+</div>
+
+<!-- ─── ACRONYM LEGEND ─────────────────────────────────────────────────────── -->
+<div class="bg-light">
+<div class="section">
+  <div class="section-title">📖 Acronyms & Terms Explained</div>
+  <hr class="divider">
+  <div class="legend-grid">
+    <div class="legend-item"><span class="legend-term">PR</span><span class="legend-def">Pull Request — a bundle of code changes waiting for review before merging into the main codebase</span></div>
+    <div class="legend-item"><span class="legend-term">CI</span><span class="legend-def">Continuous Integration — automated tests that run every time code is pushed (not required for Max Agency, but supported)</span></div>
+    <div class="legend-item"><span class="legend-term">WSL</span><span class="legend-def">Windows Subsystem for Linux — runs a real Linux environment inside Windows, used by Hermes</span></div>
+    <div class="legend-item"><span class="legend-term">Hermes</span><span class="legend-def">The Linux AI gateway that runs the Orchestrator and Coder as isolated profiles inside WSL</span></div>
+    <div class="legend-item"><span class="legend-term">systemd</span><span class="legend-def">Linux service manager — runs the Hermes timers in the background every 5 minutes</span></div>
+    <div class="legend-item"><span class="legend-term">Label</span><span class="legend-def">A tag on a GitHub Issue that routes it to the right AI (e.g., <code>assigned:claude-opus</code> → Windows brain picks it up)</span></div>
+    <div class="legend-item"><span class="legend-term">Tick</span><span class="legend-def">One 5-minute cycle of the Orchestrator or Claude Code routine checking GitHub and doing its job</span></div>
+    <div class="legend-item"><span class="legend-term">Kickoff</span><span class="legend-def">A special GitHub Issue (labeled <code>kickoff</code>) that tells the Orchestrator to read PLAN.md and create all task issues</span></div>
+    <div class="legend-item"><span class="legend-term">CTO Review</span><span class="legend-def">A GitHub Issue created by the Orchestrator for Claude Code to review a PR. Different from the PR itself.</span></div>
+    <div class="legend-item"><span class="legend-term">PLAN.md</span><span class="legend-def">The Architect's output — a markdown file with phases, tasks, dependencies, and rollback instructions for the whole project</span></div>
+    <div class="legend-item"><span class="legend-term">Verdict</span><span class="legend-def">The CTO's decision on a PR: APPROVED (merge it), CHANGES REQUIRED (fix and resubmit), or ESCALATE (needs a human)</span></div>
+    <div class="legend-item"><span class="legend-term">gh</span><span class="legend-def">The GitHub CLI — a command-line tool both AIs use to read and write GitHub issues, PRs, and comments</span></div>
+  </div>
+</div>
+</div>
+
+<!-- ─── FOOTER ─────────────────────────────────────────────────────────────── -->
+<div class="footer">
+  <p>📖 <a href="Human_Runbook.md">Human_Runbook.md</a> — Full setup guide, all bootstrap prompts, 30+ troubleshooting scenarios</p>
+  <p>🏗️ <a href="max-agency-flow-diagram.html">max-agency-flow-diagram.html</a> — Deep dive: how the system works under the hood</p>
+  <p>📐 <a href="Highlevel_Plan_V2.0.md">Highlevel_Plan_V2.0.md</a> — Architecture reference for contributors</p>
+  <br>
+  <p style="opacity: 0.5; font-size: 0.8rem;">Max Agency — Baseline scaffold. All rights reserved until a license file is added.</p>
+</div>
+
+</body>
+</html>
