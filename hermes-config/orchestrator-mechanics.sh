@@ -139,6 +139,8 @@ now = datetime.now(timezone.utc)
 for issue in issues:
     num = issue['number']
     if not issue['assignees']: continue
+    label_names = [l['name'] for l in issue.get('labels',[])]
+    if 'role:cto' in label_names: continue  # CTO reviews have no branch by design
     assignee = issue['assignees'][0]['login']
     # Check for branch
     branches = subprocess.run(['gh','api',f'repos/{repo}/branches','--jq','.[].name'],
