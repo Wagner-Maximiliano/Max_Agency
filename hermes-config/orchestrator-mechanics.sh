@@ -352,16 +352,24 @@ for issue in issues:
                 print(f'  auto-merged PR #{pr_num}, closed CTO review #{num}', file=sys.stderr)
             else:
                 print(f'  WARN: merge failed for PR #{pr_num}: {result.stderr}', file=sys.stderr)
-        else:
-            # Human review needed — escalate
-            pr_url = f'https://github.com/{repo}/pull/{pr_num}' if pr_num else '(unknown)'
+        elif pr_num:
+            # PR merge needs human sign-off — escalate
+            pr_url = f'https://github.com/{repo}/pull/{pr_num}'
             msg = f'👀 YOUR EYES NEEDED — {repo}\n\nThe AI completed a task and it passed quality review.\nI need you to approve the final merge — this change may affect the UI or is hard to reverse.\n\n📸 See the changes here: {pr_url}\n🤖 AI quality check: Passed ✅\n\nReply with a number:\n1️⃣ MERGE — looks good, ship it\n2️⃣ REJECT — send it back\n3️⃣ EXPLAIN — break it down for me'
-            # write escalation
             with open('/home/hermes/.hermes/profiles/orchestrator/escalations.log','a') as f:
                 f.write(f'ESCALATION @ {now.isoformat()}:\n{msg}\n\n')
             subprocess.run(['gh','issue','close',str(num),'--repo',repo,
-                '--comment','Routed: APPROVED, waiting for human sign-off.'], capture_output=True)
+                '--comment','Routed: APPROVED, waiting for human sign-off on merge.'], capture_output=True)
             print(f'  escalated PR #{pr_num} for human merge (HUMAN-REVIEW: YES)', file=sys.stderr)
+        else:
+            # Plan review approved — no PR to merge; needs human go-ahead to start building
+            issue_url = f'https://github.com/{repo}/issues/{num}'
+            msg = f'👀 YOUR GO-AHEAD NEEDED — {repo}\n\nThe CTO has approved the project PLAN. Before the team starts building, you need to give the green light.\n\n📋 Review the approved plan + CTO notes here: {issue_url}\n🤖 CTO verdict: APPROVED ✅\n\nReply with a number:\n1️⃣ START — plan looks good, begin the work\n2️⃣ CHANGES — I want something adjusted first\n3️⃣ EXPLAIN — walk me through the plan'
+            with open('/home/hermes/.hermes/profiles/orchestrator/escalations.log','a') as f:
+                f.write(f'ESCALATION @ {now.isoformat()}:\n{msg}\n\n')
+            subprocess.run(['gh','issue','close',str(num),'--repo',repo,
+                '--comment','Routed: PLAN APPROVED by CTO — waiting for human go-ahead to begin work.'], capture_output=True)
+            print(f'  escalated plan review #{num} for human go-ahead (HUMAN-REVIEW: YES)', file=sys.stderr)
 
     elif verdict.startswith('CHANGES'):
         if task_num:
