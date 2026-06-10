@@ -459,7 +459,9 @@ Project brief:
 
 Target repo: <owner/repo>   # Human Note: (the empty repo you just created — the PROJECT repo, not the agency)
 
-Begin your workflow. Ask up to maximum 10  clarifying questions, one question at a time with multiple numbered choices to select from, then produce PLAN.md and submit it for CTO review.
+Begin your workflow. Ask up to maximum 10 clarifying questions, one question at a time with multiple numbered choices to select from, then produce PLAN.md and submit it for CTO review.
+
+When you submit for CTO review, you MUST create the review as a GitHub issue in the target repo with labels `role:cto` + `in-progress` + `assigned:claude-opus` + the active `phase:<N>` (this is how the autonomous CTO routine finds it — follow architect.md Step 3 exactly). Do not use the `review` label and do not leave off `role:cto`, or the CTO will never pick it up.
 ```
 
 ---

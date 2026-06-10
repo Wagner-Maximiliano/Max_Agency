@@ -39,8 +39,32 @@ Turn a human goal into a concrete, machine-executable `PLAN.md`. Hand off to the
 
    The CTO verifies this during plan review. The Orchestrator reads it after each merge. If a task has no doc impact, write "none" — do not leave the row empty.
 
-3. **Submit to CTO.** Open a fresh CTO session, paste `PLAN.md` and `docs/DOC_MANIFEST.md`, request review against the Plan Acceptance Checklist.
-4. **Revise.** Up to **3 rounds** with CTO. After round 3 if still rejected → escalate to human via Telegram with the unresolved disagreements.
+3. **Submit to CTO** by creating a GitHub issue in the **project repo**. You are running autonomously — there is no human pasting between sessions. The CTO is a separate Claude Code tick that only ever picks up issues matching `in-progress` + `assigned:claude-*` + `role:cto`. If you use any other labels, the CTO routine will never see your review and the project stalls. Follow this exactly:
+
+   a. **Idempotency check** — do not open a second plan review if one is already open:
+      ```sh
+      gh issue list --repo $PROJECT_REPO --label role:cto --search "CTO review: PLAN in:title" --state open
+      ```
+      If one exists, stop — the CTO has not yet ruled on it.
+
+   b. **Create the review issue** with the canonical labels (these three are non-negotiable; add the active `phase:<N>` too):
+      ```sh
+      gh issue create --repo $PROJECT_REPO \
+        --title "CTO review: PLAN.md — approve before <phase> work begins" \
+        --label role:cto --label in-progress --label assigned:claude-opus --label phase:<N> \
+        --body "<body from step c>"
+      ```
+
+   c. **The body must request the verdict in the exact format the CTO's contract emits** (`agents/cto.md`). Include:
+      - Links to `PLAN.md` and `docs/DOC_MANIFEST.md` in the project repo.
+      - The full **Plan Acceptance Checklist** (copy it from `agents/cto.md`).
+      - Any open questions for the CTO.
+      - This response instruction verbatim:
+        > Post a single comment. The **very first line must be the verdict token**: `VERDICT: APPROVED`, `VERDICT: CHANGES REQUIRED`, or `VERDICT: ESCALATE`. Do not close this issue — it is routed automatically. (A plan `VERDICT: APPROVED` has no PR to merge, so it routes to the human for the explicit ack in step 5.)
+
+   d. **Do not** label the issue `review` (that state is for PRs awaiting CTO review, and the CTO routine does not poll it). **Do not** assign it to yourself.
+
+4. **Revise.** Up to **3 rounds** with CTO. The CTO posts its verdict as a comment and leaves the issue open. On `CHANGES REQUIRED`, update `PLAN.md` / `DOC_MANIFEST.md`, then re-open a fresh review issue (step 3) — the prior one is closed by the router once ruled on. After round 3 if still rejected → escalate to human via Telegram with the unresolved disagreements.
 5. **Get human approval.** After CTO approves, present `PLAN.md` to the human for one explicit ack. Do not proceed without it.
 6. **Hand off.** Commit `PLAN.md` and `docs/DOC_MANIFEST.md`, open issue `#1: Kick off project` assigned to Orchestrator.
 
