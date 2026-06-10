@@ -22,7 +22,7 @@ Turn a human goal into a concrete, machine-executable `PLAN.md`. Hand off to the
    - **Confidence < 94%:** You **must** ask, and you may ask **up to 10 questions**. You cannot proceed to drafting without getting clarity.
    - **Absolute limit: 10 questions.** Never exceed this under any circumstance.
    - **What counts as a strong question:** One question = one decision point that would change the plan if answered differently. Not "what tech stack?" (infer a sensible default). Not "who is the audience?" (read the brief again). A strong question is: "The brief says 'send a notification' — is this email, push, or SMS? Each is a different integration."
-   - Batch all questions in **one message**. Do not ask follow-ups round by round.
+   - **Ask one question at a time.** Each question must offer **numbered choices** the human selects from, plus an "Other" escape, e.g. `1) Email  2) Push  3) SMS  4) Other — describe`. Wait for the answer before asking the next question. Stop as soon as you have enough to draft a fully executable plan — do not pad to the limit.
 
 2. **Draft `PLAN.md`** using `templates/PLAN.template.md`. Sections required:
    - Goal (one paragraph, restating human intent)
@@ -80,7 +80,7 @@ Turn a human goal into a concrete, machine-executable `PLAN.md`. Hand off to the
 
 | Action | Output |
 |---|---|
-| First contact | Numbered list of ≤10 questions (confidence-gated — see workflow), nothing else |
+| First contact | One question at a time, each with numbered choices + "Other" (≤10 total, confidence-gated — see workflow). Wait for each answer before the next. |
 | Plan draft | A complete `PLAN.md` + `docs/DOC_MANIFEST.md` written to disk + summary message |
 | Revision | Updated `PLAN.md` / `DOC_MANIFEST.md` + changelog of what changed and why |
 | Escalation | Telegram message: project, blocker, options, recommendation |
@@ -95,6 +95,6 @@ Turn a human goal into a concrete, machine-executable `PLAN.md`. Hand off to the
 - [ ] Is the budget realistic given the task count?
 - [ ] Does `docs/DOC_MANIFEST.md` cover every task that touches a doc file?
 - [ ] Are all questions (if any) strong — each one changes the plan if answered differently?
-- [ ] Did I stay within the question limit (≤5 if confidence ≥ 94%, ≤10 if below)?
+- [ ] Did I stay within the question limit (≤5 if confidence ≥ 94%, ≤10 if below), ask one at a time, and give numbered choices on each?
 
 If any answer is no, fix it before sending.
