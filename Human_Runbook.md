@@ -1,42 +1,26 @@
 # Human Runbook — Max Agency
 
-> **Not yet done with setup? Start here.** `docs/How_Max_Agency_Works.pdf` is the illustrated walkthrough. This runbook is the step-by-step instructions.
-
-## Quick Start (first time)
-
-**Prerequisites — install these first:**
-
-| Tool | Install |
-|---|---|
-| Windows 11 + WSL2 | `wsl --install` in Admin PowerShell |
-| Claude Desktop + Claude Code CLI | https://claude.ai/download then `npm install -g @anthropic-ai/claude-code` |
-| Hermes | Follow Hermes install guide (provides `hermes` CLI in WSL) |
-| GitHub CLI | https://cli.github.com — then `gh auth login` |
-
-**Supported platform: Windows 11 + WSL2 only.** Mac/Linux is out of scope.
-
-**Then (first-time setup, 4 commands):**
-
-```powershell
-# 1. Clone the agency repo (Windows)
-git clone https://github.com/<your-github-username>/Max_Agency "$env:USERPROFILE\Github_Projects\Max_Agency"
-
-# 2. Bootstrap Hermes (WSL terminal — paste H1, H2, H3 from Section A3)
-hermes chat
-
-# 3. Deploy service files
-wsl -u hermes bash -c "bash ~/.hermes-cache/Max_Agency/hermes-config/deploy.sh"
-
-# 4. Register the Claude Code routine (Windows PowerShell)
-cd "$env:USERPROFILE\Github_Projects\Max_Agency\claude-code-routine"
-.\register-task.ps1 -Repo "<your-github-username>/your-project-repo" -ProjectPath "$env:USERPROFILE\Github_Projects\Max_Agency"
-```
-
-**To kick off a project:** paste the Architect prompt (Section C) into Claude Desktop, then the agents take over.
+> **New here?** Open `max-agency-flow-diagram(Production).html` in a browser — an illustrated, plain-language walkthrough of how the system works and how to install it. This runbook is the precise step-by-step.
 
 ---
 
-Two parts: **Reference** (how it works — read once, skip later) and **Instructions** (what to do — follow every time).
+## Quick Start
+
+There are **three things you ever do**. Find your situation and jump to it:
+
+| Your situation | Go to |
+|---|---|
+| 🖥️ **Fresh machine** — Max Agency is not installed yet | **Part 1 — Set up a new environment** |
+| 🆕 **Machine is ready, starting a brand-new project** (empty repo, no plan yet) | **Part 2A — New project from scratch** |
+| ♻️ **Machine is ready, returning to a project that already has labels + a plan** | **Part 2B — Existing project** |
+
+**Supported platform: Windows 11 + WSL2 only.** Mac/Linux is out of scope.
+
+> Do Part 1 **once per machine**. After that you only ever do Part 2A or Part 2B — never Part 1 again.
+
+---
+
+Two halves below: **Reference** (how it works — read once) and **Instructions** (what to do — follow every time).
 
 ---
 
@@ -44,21 +28,21 @@ Two parts: **Reference** (how it works — read once, skip later) and **Instruct
 
 ## What this is
 
-An autonomous multi-agent dev team coordinated through GitHub. You paste prompts to set it up and kick off projects; the agents do the rest. You approve merges and resolve escalations.
+An autonomous multi-agent dev team coordinated through GitHub. You paste prompts to set it up and kick off projects; the agents do the rest. You approve a few merges and resolve the occasional escalation.
 
 ## The three locations
 
 | # | Name | Where | You touch it |
 |---|---|---|---|
-| 1 | **Agency repo** — the engine (prompts, skills, scripts) | Windows: `$env:USERPROFILE\Github_Projects\Max_Agency` (or wherever you cloned it) + GitHub mirror | Rarely — only to upgrade the agency |
-| 2 | **Hermes cache** — auto-pulled copy of the agency | WSL: `~/.hermes-cache/Max_Agency` | Never |
-| 3 | **Project repo** — one per project (PLAN, issues, code) | A new empty GitHub repo | Create it; then approve PRs |
+| 1 | **Agency repo** — the engine (prompts, skills, scripts) | Windows: `$env:USERPROFILE\Github_Projects\Max_Agency` + a mirror on your GitHub account | Rarely — only to upgrade the engine |
+| 2 | **Hermes cache** — auto-pulled copy of the agency | WSL: `~/.hermes-cache/Max_Agency` | Never (managed automatically) |
+| 3 | **Project repo** — one per project (PLAN, issues, code) | A GitHub repo | Create it; then approve PRs |
 
 ## Key facts
 
-- **Hermes runs in WSL; Claude Code runs in Windows.** They are separate — an env var set in one is invisible to the other. That's why the project repo is typed into the H2 prompt directly, not read from a Windows variable.
+- **Hermes runs in WSL; Claude Code runs in Windows.** They are separate processes — an env var set in one is invisible to the other. That's why the project repo is baked into Hermes via the **H2** prompt *and* passed to the Windows routine via **register-task.ps1** separately. **Both must point at the same repo slug**, spelled identically.
 - **The agency is the toolkit; a project repo is the workshop.** Never copy files between them.
-- **Project repos are empty + remote-only.** You never clone them locally; the agents work via GitHub.
+- **Project repos live on GitHub; you don't clone them locally.** The agents do all work through GitHub.
 
 ## Binding docs (every agent reads these)
 
@@ -66,17 +50,19 @@ An autonomous multi-agent dev team coordinated through GitHub. You paste prompts
 
 ## Label scheme (canonical)
 
-Every project issue carries four label groups. Pollers find work by intersecting all four.
+Every project issue carries four label groups. Pollers find work by **intersecting all four** — a missing label makes an issue invisible to its agent.
 
 | Group | Values | Owner |
 |---|---|---|
 | `assigned:<model>` | `hermes-coder`, `claude-haiku`, `claude-sonnet`, `claude-opus` | PLAN.md Model Roster decides |
-| `role:<role>` | `architect`, `cto`, `coder` | Orchestrator infers from task title at kickoff |
+| `role:<role>` | `architect`, `cto`, `coder` | Set when the issue is created |
 | `phase:<N>` | `phase:0` through `phase:7` | From PLAN.md |
 | State | `backlog` → `ready` → `in-progress` → `review` (plus `blocked`, `kickoff`, `planned`) | Orchestrator manages transitions |
 
 **Hermes coder** polls `in-progress + assigned:hermes-coder + role:coder`.
 **Claude Code routine** polls `in-progress + assigned:claude-*` and reads `role:*` to load the right agent file (`agents/architect.md`, `agents/cto.md`, or `agents/coder.md`).
+
+> ⚠️ **CTO review issues** (whether for a PR or for a PLAN) **must** carry `role:cto` + `in-progress` + `assigned:claude-opus`. The mechanics script labels PR reviews correctly on its own; for PLAN reviews the Architect does it (see `agents/architect.md` Step 3). An issue labelled `review` or missing `role:cto` will **never** be picked up.
 
 There are **no separate CTO/Architect routines**. One Claude Code routine handles all three roles, switching behavior based on the issue's `role:*` label. Hermes only ever runs as coder.
 
@@ -121,17 +107,44 @@ Reply with a number:
 
 **Safety gates:** the CTO is always a *different* agent instance than the coder it reviews, and `HUMAN-REVIEW: YES` changes always wait for you before merging.
 
-> 📘 **New to all this?** Read `docs/How_Max_Agency_Works.pdf` — a fully illustrated, plain-language walkthrough of everything below.
-
 ---
 
 # Instructions
 
-## A. First-time setup (once per machine)
+## Part 1 — Set up a new environment (install Max Agency)
 
-### A1 — Publish the agency repo
+**Do this once per machine.** It installs the engine but does not start any project — that's Part 2.
 
-Windows PowerShell:
+### 1.1 — Prerequisites (install these first)
+
+| Tool | Install |
+|---|---|
+| Windows 11 + WSL2 | `wsl --install` in Admin PowerShell, then reboot |
+| Claude Desktop + Claude Code CLI | https://claude.ai/download, then `npm install -g @anthropic-ai/claude-code` |
+| Hermes | Follow the Hermes install guide (provides the `hermes` CLI in WSL) |
+| GitHub CLI | https://cli.github.com — then `gh auth login` (HTTPS + browser) **in both Windows PowerShell and WSL** |
+
+**Check (run in both Windows PowerShell and a WSL terminal):**
+
+```
+claude --version     # prints a version
+gh --version         # prints a version
+gh auth status       # shows your account as active
+```
+
+> `gh` must be authenticated **separately** in Windows and WSL — they are different installs. The Windows routine and Hermes each use their own `gh`.
+
+### 1.2 — Get Max Agency onto your machine and your GitHub
+
+Hermes clones the agency from your GitHub account, so the repo must exist there. Two cases:
+
+**If you forked / already have `Max_Agency` on your GitHub:** just clone it to Windows.
+
+```powershell
+git clone https://github.com/<your-github-username>/Max_Agency "$env:USERPROFILE\Github_Projects\Max_Agency"
+```
+
+**If you only have the files locally (no GitHub copy yet):** create an empty `Max_Agency` repo on github.com, then publish.
 
 ```powershell
 cd "$env:USERPROFILE\Github_Projects\Max_Agency"
@@ -140,153 +153,164 @@ git remote add origin https://github.com/<your-github-username>/Max_Agency.git
 git add .; git commit -m "initial: max agency baseline"; git push -u origin main
 ```
 
-**Check:** `git remote -v` shows the origin URL. (Skip this step if the repo is already on GitHub.)
+**Check:** `git -C "$env:USERPROFILE\Github_Projects\Max_Agency" remote -v` shows your origin URL.
 
-### A2 — Set Windows env var (Claude Code routine only)
+### 1.3 — Create the Hermes profiles (prompt H1)
 
-Windows PowerShell:
-
-```powershell
-notepad $PROFILE
-```
-
-Paste at the bottom, save, close, then reopen PowerShell:
-
-```powershell
-$env:MAX_AGENCY_CACHE = "$env:USERPROFILE\.hermes-cache\Max_Agency"
-# Telegram (optional):
-# $env:TELEGRAM_BOT_TOKEN = "..."
-# $env:TELEGRAM_CHAT_ID   = "..."
-```
-
-**Check:** new PowerShell window → `$env:MAX_AGENCY_CACHE` prints the path.
-**Undo:** reopen `notepad $PROFILE`, delete those lines, save.
-
-### A3 — Bootstrap Hermes
-
-WSL terminal:
+Open a **WSL** terminal:
 
 ```bash
 hermes chat
 ```
 
-Paste **H1**, wait for `BOOTSTRAP_H1_COMPLETE`. Edit the first line of **H2** with your project repo, paste, wait for `BOOTSTRAP_H2_COMPLETE`. Paste **H3**, wait for `BOOTSTRAP_COMPLETE`.
+Edit the `PUBLIC_REPO` line in **H1** (Section C) to your GitHub username, paste it, and wait for `BOOTSTRAP_H1_COMPLETE`. This creates the `orchestrator` and `coder` profiles and clones the agency into `~/.hermes-cache/Max_Agency`.
 
-**Undo:** see "Teardown" below.
+> H1 is project-agnostic — it sets up the engine, not a project. You point at a specific project later in Part 2 (prompt H2).
 
-### A3b — Deploy the agency service files
+### 1.4 — Deploy the systemd timers
 
-After H3 completes, run `deploy.sh` to copy the canonical service files and mechanics script from the agency repo to the live Hermes install:
+This copies the canonical service files and the mechanics script into the live Hermes install and starts the every-5-minutes timers. **Without this step Hermes is installed but asleep.**
 
 ```bash
 git -C ~/.hermes-cache/Max_Agency pull --rebase && \
   bash ~/.hermes-cache/Max_Agency/hermes-config/deploy.sh
 ```
 
-`deploy.sh` copies `hermes-orchestrator-tick.service`, `hermes-coder-tick.service`, profile configs, and `orchestrator-mechanics.sh` to their live locations, then reloads systemd. Run it again any time the agency repo is updated.
+**Check:** `systemctl --user list-timers | grep hermes` shows `hermes-orchestrator-tick.timer` and `hermes-coder-tick.timer` with a `NEXT` time.
 
-**Check:** `grep max-turns ~/.config/systemd/user/hermes-orchestrator-tick.service` should show `--max-turns 10`.
+> Re-run this command any time you update the agency repo. It is safe to run repeatedly.
+>
+> **Key files it deploys:**
+> - `orchestrator-mechanics.sh` — the deterministic queue manager (heartbeat, promote, dispatch, reclaim, CTO-review creation, verdict routing). The orchestrator LLM calls this every tick.
+> - `hermes-orchestrator-tick.service` / `hermes-coder-tick.service` — the systemd units that fire every 5 minutes.
 
-> **Key files deployed:**
-> - `hermes-config/orchestrator-mechanics.sh` — the deterministic queue manager (heartbeat, promote, dispatch, reclaim, CTO review creation, verdict routing). The orchestrator LLM calls this every tick.
-> - `hermes-config/hermes-orchestrator-tick.service` / `hermes-coder-tick.service` — systemd units that fire every 5 minutes.
-> - `hermes-config/deploy.sh` — re-run after any agency repo update.
+### 1.5 — Configure the Hermes model
 
----
-
-### A4 — Configure the Hermes model
-
-Each agent has its model set **in its own profile config** — orchestrator and coder can be changed independently without touching the global Hermes config.
-
-WSL:
+Each agent's model lives **in its own profile config** — orchestrator and coder are independent.
 
 ```bash
 nano ~/.hermes/profiles/orchestrator/config.yaml   # orchestrator model
 nano ~/.hermes/profiles/coder/config.yaml          # coder model
 ```
 
-Find the `model:` block and change `default` and/or `max_tokens`:
+Find the `model:` block and set `default` (and `max_tokens` if needed):
 
 ```yaml
 model:
-  default: nvidia/nemotron-3-super-120b-a12b:free   # ← change this line
-  max_tokens: 16384                                  # keep ≤ OpenRouter credit balance
+  default: openai/gpt-4o-mini      # ← a fast, cheap default; change to taste
+  max_tokens: 16384                # keep ≤ your provider credit balance
 ```
 
-The global `~/.hermes/config.yaml` model is **not used** by these profiles — it remains as a fallback for other Hermes usage.
+The change takes effect on the **next tick** — no restart needed. The global `~/.hermes/config.yaml` model is a fallback for other Hermes usage and is not used by these profiles.
 
-**Supported providers** (from the comments at the bottom of `~/.hermes/config.yaml`):
-
-| Provider | Auth | Notes |
+| Provider | Auth (in `~/.hermes/.env`) | Notes |
 |---|---|---|
-| `openrouter` | `OPENROUTER_API_KEY` in `~/.hermes/.env` | Routes to any model — recommended |
-| `openai-codex` | ChatGPT OAuth (`hermes auth`) | Shares ChatGPT account quota; hits 429 under load |
+| `openrouter` | `OPENROUTER_API_KEY` | Routes to any model — recommended |
+| `openai-codex` | ChatGPT OAuth (`hermes auth`) | Shares ChatGPT quota; can 429 under load |
 | `nous` | Nous Portal OAuth | |
 | `zai` | `ZAI_API_KEY` | Z.AI / GLM |
 
-The change takes effect on the **next tick** — no timer restart needed.
+### 1.6 — (Optional) Telegram for phone approvals
 
-> **Note:** The Claude Code routine (Windows) picks its model from the issue's `assigned:claude-*` label — that's a separate, per-task setting controlled by PLAN.md. Hermes and Claude Code are independent; configuring one does not affect the other.
+So `HUMAN-REVIEW: YES` merges and escalations reach your phone instead of only a log file. **These go in WSL `~/.hermes/.env`** (the mechanics script reads them there — Windows env vars do not work for this):
+
+```bash
+nano ~/.hermes/.env
+```
+
+Add (create a bot with @BotFather; get the chat ID from `https://api.telegram.org/bot<TOKEN>/getUpdates` after messaging your bot):
+
+```
+TELEGRAM_BOT_TOKEN=123456:ABC-your-bot-token
+TELEGRAM_CHAT_ID=-1001234567890
+```
+
+If these are absent, escalations are written to `~/.hermes/profiles/orchestrator/escalations.log` instead — the system still works, you just have to read the log.
+
+**Environment is ready.** Now do Part 2 to start a project.
 
 ---
 
-### A5 — Install the Claude Code routine
+## Part 2 — Start or resume a project
 
-**Prerequisites (one-time installs):**
+Pick the path that matches your project.
+
+### Part 2A — New project from scratch
+
+A brand-new, empty repo with no labels and no plan yet.
+
+#### 2A.1 — Create an empty GitHub repo
+
+github.com → New repository → name it → **no** README / .gitignore / licence → Create. Note the slug, e.g. `your-name/my-app`.
+
+#### 2A.2 — Create the canonical labels
+
+The pipeline routes entirely on labels, so the repo needs them before anything runs. **Windows PowerShell:**
 
 ```powershell
-# 1. Claude Code CLI
-npm install -g @anthropic-ai/claude-code
-claude --version   # should print a version
-
-# 2. GitHub CLI  (https://cli.github.com)
-gh --version       # should print a version
-gh auth login      # authenticate once; choose HTTPS + browser
-gh auth status     # should show your account as active
+cd "$env:USERPROFILE\Github_Projects\Max_Agency"
+.\scripts\setup-project.ps1 -Repo "<your-github-username>/<your-project-repo>"
 ```
 
-Windows PowerShell (fill in your project repo):
+This creates all 22 labels (`assigned:*`, `role:*`, `phase:0–7`, the state labels) and sets light branch protection on `main`.
+
+**Check:** `gh label list --repo <your-github-username>/<your-project-repo>` lists `role:cto`, `assigned:claude-opus`, `in-progress`, etc.
+
+> Branch protection may warn "main may not exist yet" on a fresh empty repo — harmless. The labels are what matter, and they are created regardless.
+
+#### 2A.3 — Point Hermes at the project (prompt H2)
+
+**WSL:** in `hermes chat`, edit the first line of **H2** (Section C) to your project slug, paste it, wait for `BOOTSTRAP_H2_COMPLETE`. This writes `PROJECT_REPO=<slug>` into `~/.hermes/.env`.
+
+#### 2A.4 — Point the Claude Code routine at the project
+
+**Windows PowerShell** (use the **same slug** as 2A.3):
 
 ```powershell
-$env:PROJECT_REPO = "<your-github-username>/your-project-repo"
 cd "$env:USERPROFILE\Github_Projects\Max_Agency\claude-code-routine"
-.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "$env:USERPROFILE\Github_Projects\Max_Agency" -IntervalMinutes 5
+.\register-task.ps1 -Repo "<your-github-username>/<your-project-repo>" -ProjectPath "$env:USERPROFILE\Github_Projects\Max_Agency" -IntervalMinutes 5
 ```
 
-**Check:** `Get-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine"` shows the task.
-**Undo:** `Unregister-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine" -Confirm:$false`
+**Check:** `Get-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine"` shows the task as `Ready`.
+
+#### 2A.5 — Kick off the Architect
+
+Open **Claude Desktop**, start a new conversation, and paste the **Architect kickoff** prompt (Section C) with your one-paragraph brief and the project slug filled in. Answer its questions (one at a time), then approve `PLAN.md` when it asks. From there the agents take over.
 
 ---
 
-## B. Start a new project (each time)
+### Part 2B — Existing project
 
-### B1 — Create an empty GitHub repo
+A repo that **already has** the Max Agency labels and a plan/history (e.g. you're switching back to it, or set it up on a new machine). The labels already exist, so you do **not** re-run `setup-project.ps1`, and the plan already exists, so you usually do **not** re-run the Architect.
 
-github.com → New repository → name it → **no** README/gitignore/licence → Create.
+#### 2B.1 — Point Hermes at the project (prompt H2)
 
-### B2 — Point Hermes at it
+**WSL:** in `hermes chat`, edit the first line of **H2** (Section C) to the existing project slug, paste it, wait for `BOOTSTRAP_H2_COMPLETE`. This re-points `~/.hermes/.env` at this repo.
 
-WSL: edit the first line of **H2** to your new repo, paste it into `hermes chat`. Wait for `BOOTSTRAP_H2_COMPLETE`.
+#### 2B.2 — Point the Claude Code routine at the project
 
-### B3 — Point the Claude Code routine at it
-
-Windows PowerShell:
+**Windows PowerShell** (same slug as 2B.1; `-Force` is built in, so it safely overwrites the previous registration):
 
 ```powershell
-$env:PROJECT_REPO = "<your-github-username>/your-new-repo"
 cd "$env:USERPROFILE\Github_Projects\Max_Agency\claude-code-routine"
-.\register-task.ps1 -Repo $env:PROJECT_REPO -ProjectPath "$env:USERPROFILE\Github_Projects\Max_Agency" -IntervalMinutes 5
+.\register-task.ps1 -Repo "<your-github-username>/<your-project-repo>" -ProjectPath "$env:USERPROFILE\Github_Projects\Max_Agency" -IntervalMinutes 5
 ```
 
-### B4 — Kick off the Architect
+#### 2B.3 — Resume (and, if needed, start the next phase)
 
-Claude Code app, any directory: paste the **Architect kickoff** prompt with your brief and repo filled in. Answer its questions, approve `PLAN.md` when asked. Done — the agents take over.
+Both runtimes are now pointed at the project. Within ~5 minutes the timers and routine pick up wherever the project left off — open `in-progress` issues get worked, open CTO reviews get verdicts, approved PRs merge.
+
+- **Verify it's alive:** `systemctl --user list-timers | grep hermes` (WSL) and check the Windows routine log at `...\Max_Agency\logs\claude-routine.log`.
+- **If a label got into a bad state** (e.g. a CTO review missing `role:cto`), fix it per the ⚠️ note in the Label scheme above.
+- **To start a new phase** that isn't open yet, paste the **Architect kickoff** prompt (Section C) describing the next phase. The Architect writes/updates `PLAN.md`, submits it for CTO review, and on your go-ahead the Orchestrator creates that phase's issues.
 
 ---
 
 ## C. Prompts
 
 ### H1
+
+Edit `PUBLIC_REPO` (line 2 of CONSTANTS) to your GitHub username before pasting.
 
 ```
 You are bootstrapping the Max Agency on this machine. Follow these steps in order. Do NOT improvise. Do NOT skip steps. Print [OK] or [FAIL: <reason>] after each numbered step.
@@ -422,11 +446,13 @@ OUTPUT CONTRACT:
 - Print script output verbatim.
 - Final line MUST be BOOTSTRAP_H2_COMPLETE (all steps pass) or BOOTSTRAP_H2_ABORT (any fail).
 - STOP immediately after the script exits.
-
-> **Note:** H2 registers Hermes built-in cron jobs (steps 4–5). These are stored inside Hermes but **do not fire automatically on this setup** — the real runtime is the **systemd user timers** deployed by `deploy.sh` (step A3b). The H2 cron registration exists only for environments where the Hermes gateway runs cron natively. After H2 completes, always run step A3b (`deploy.sh`) to activate the systemd timers.
 ```
 
-### H3 (verify setup)
+> **Note:** H2 registers Hermes built-in cron jobs (steps 4–5). These are stored inside Hermes but **do not fire automatically on this setup** — the real runtime is the **systemd user timers** from `deploy.sh` (Part 1, step 1.4). The H2 cron registration exists only for environments where the Hermes gateway runs cron natively, and to bake `PROJECT_REPO` into `~/.hermes/.env`. The systemd timers (already running from Part 1) read that `PROJECT_REPO` on their next tick.
+
+### H3 (verify setup — optional)
+
+Paste any time to confirm the environment + current project are wired correctly.
 
 ```
 You are continuing Max Agency bootstrap. H1 and H2 must have completed. Run all checks below. Print PASS or FAIL for each.
@@ -449,17 +475,19 @@ OUTPUT CONTRACT:
 STOP.
 ```
 
-### Architect kickoff (Claude Code app)
+### Architect kickoff (Claude Desktop)
+
+Replace `<your-github-username>` in the URL with yours (or paste the agency repo URL you published in Part 1).
 
 ```
-You are the Architect of the Max Agency. Your role contract is at https://github.com/Wagner-Maximiliano/Max_Agency/blob/main/agents/architect.md — fetch it (or clone the repo) and follow it exactly. Also read docs/MDP.md, docs/AMA.md, CODING_STANDARDS.md, and Highlevel_Plan_V2.0.md from the same repo.
+You are the Architect of the Max Agency. Your role contract is at https://github.com/<your-github-username>/Max_Agency/blob/main/agents/architect.md — fetch it (or clone the repo) and follow it exactly. Also read docs/MDP.md, docs/AMA.md, CODING_STANDARDS.md, and Highlevel_Plan_V2.0.md from the same repo.
 
 Project brief:
 <one paragraph: goal, constraints, deadline if any>
 
-Target repo: <owner/repo>   # Human Note: (the empty repo you just created — the PROJECT repo, not the agency)
+Target repo: <owner/repo>   # the project repo — NOT the agency repo
 
-Begin your workflow. Ask up to maximum 10 clarifying questions, one question at a time with multiple numbered choices to select from, then produce PLAN.md and submit it for CTO review.
+Begin your workflow. Ask up to a maximum of 10 clarifying questions, one question at a time with multiple numbered choices to select from, then produce PLAN.md and submit it for CTO review.
 
 When you submit for CTO review, you MUST create the review as a GitHub issue in the target repo with labels `role:cto` + `in-progress` + `assigned:claude-opus` + the active `phase:<N>` (this is how the autonomous CTO routine finds it — follow architect.md Step 3 exactly). Do not use the `review` label and do not leave off `role:cto`, or the CTO will never pick it up.
 ```
@@ -483,6 +511,13 @@ hermes -p coder cron list          # note the hex job ID next to max-agency-code
 hermes cron remove <coder-job-id>
 ```
 
+**Systemd timers** (WSL — stops the real runtime):
+
+```bash
+systemctl --user stop hermes-orchestrator-tick.timer hermes-coder-tick.timer
+systemctl --user disable hermes-orchestrator-tick.timer hermes-coder-tick.timer
+```
+
 **Hermes profiles** (WSL — only if fully removing):
 
 ```bash
@@ -491,18 +526,17 @@ hermes profile remove coder
 rm -rf ~/.hermes-cache/Max_Agency
 ```
 
-**Windows env var:** `notepad $PROFILE`, delete the lines, save.
-
 ---
 
 ## E. Cheat sheet
 
-| Action | Where | Command / prompt |
+| Action | Where | Steps |
 |---|---|---|
-| First setup | — | A1 → A2 → A3 → A4 |
-| New project | — | B1 → B2 → B3 → B4 |
-| Re-run prompts | WSL | `hermes chat` |
-| Verify | WSL | paste H3 |
+| Install on a new machine | — | Part 1 (1.1 → 1.6) |
+| Start a brand-new project | — | Part 2A (2A.1 → 2A.5) |
+| Return to an existing project | — | Part 2B (2B.1 → 2B.3) |
+| Switch which project is active | WSL + Windows | H2 (Hermes) + `register-task.ps1` (routine) with the new slug |
+| Verify wiring | WSL | paste H3 |
 | Undo | — | Section D |
 
 ---
@@ -514,45 +548,46 @@ rm -rf ~/.hermes-cache/Max_Agency
 | H2 FAIL: placeholder | You didn't edit the `PROJECT_REPO = ...` first line. Edit and re-paste. |
 | H2 FAIL: prompt files missing | H1 didn't finish. Re-run H1. |
 | H3 CHECK 8 FAIL | H2 didn't finish or kept the placeholder. Re-run H2, then H3. |
-| Set `$env:PROJECT_REPO` but Hermes ignores it | Expected — Windows ≠ WSL. For Hermes use H2; for Claude Code routine use `register-task.ps1`. |
-| Cron not firing | WSL: `hermes -p orchestrator cron list`, check `hermes status`, see `~/.hermes/profiles/orchestrator/escalations.log`. |
-| Wrong project | Hermes: re-paste H2 with corrected repo. Windows: re-run `register-task.ps1`. |
-| Routine not picking up issues | Windows: `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine` → History. Verify `claude --version` and `gh auth status` both work. |
-| Claude Code scheduled task opens a visible terminal window | The task was registered with `LogonType Interactive`. Re-run `register-task.ps1` (now uses `S4U`) or run: `$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType S4U -RunLevel Limited; Set-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine" -Principal $p` |
-| Claude Code routine output not visible | Log is written to `<AgencyPath>\logs\claude-routine.log`. Each entry is prefixed `=== TICK <timestamp> \| issue=<N> model=<m> ===`. |
-| `register-task.ps1` fails with "positional parameter... GitHub" | PowerShell 5.1 encoding bug — the `.ps1` file has a non-ASCII character (em-dash). Re-pull the latest agency repo: `git pull`. |
-| Both runtimes grab one issue | Issue has two `assigned:*` labels. Fix to one, re-add `ready`. |
-| Hermes coder firing every minute but never picks work | Check the issue has all three: `in-progress` + `assigned:hermes-coder` + `role:coder`. Coder only handles `role:coder`. |
+| Nothing happens after setup | Timers not running. WSL: `systemctl --user list-timers \| grep hermes` — if absent, re-run `deploy.sh` (Part 1, step 1.4). |
+| Set `$env:PROJECT_REPO` but Hermes ignores it | Expected — Windows ≠ WSL. For Hermes use H2; for the Claude Code routine use `register-task.ps1`. |
 | Claude Code routine logs `NO_WORK` even with open issues | Issue must have `assigned:claude-*` (haiku/sonnet/opus) AND a `role:*` label. Architect/CTO tasks need `role:architect`/`role:cto`. |
-| Orchestrator logs `TICK_FAIL step:missing-rebuild-state` | `powershell.exe` is unavailable in the WSL sandbox. The step is now best-effort and non-fatal — but if you see it repeatedly, run `scripts/rebuild-state.ps1` manually from Windows PowerShell occasionally to refresh State.md. |
-| Orchestrator logs `NO_REPO` | `~/.hermes/.env` missing `PROJECT_REPO=...`. WSL: `cat ~/.hermes/.env`, add the line if missing, then `systemctl --user restart hermes-orchestrator-tick.timer`. |
-| Orchestrator steps 7.5–9 (close merged PRs, CTO review, verdict routing) not happening | These are handled by `orchestrator-mechanics.sh`, not the LLM. Run it manually to see the error: `PROJECT_REPO=owner/repo bash ~/.hermes/profiles/orchestrator/orchestrator-mechanics.sh`. Check stderr for Python tracebacks or `gh` auth errors. |
-| Orchestrator service killed mid-run (`Failed with result 'timeout'` in journalctl) | `TimeoutStartSec` too low. Re-run `deploy.sh` to restore the canonical value, or: `sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=300/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. |
-| Phase task issues never appear after kickoff | Issue #2 (or your kickoff issue) has the `kickoff` label removed but no child issues exist — the orchestrator's step 4 failed silently. Re-add the `kickoff` label and watch the next tick; idempotency check prevents duplicates. |
-| OpenRouter rate limits | WSL: get job ID from `hermes -p orchestrator cron list`, `hermes cron remove <id>`, re-run H2 (change `* * * * *` to `*/5 * * * *` in the prompt). |
-| Claude Code routine fails with `401 Invalid authentication credentials` | The Claude Code OAuth token expired (~30-day life). Run `claude /login` in a PowerShell window, sign in, done. The scheduled task picks up the fresh token next tick. |
-| Claude Code routine "succeeds" (result 0) but does no work | The routine asked for `gh` permission it couldn't get headlessly. Confirm `.claude/settings.json` exists in the agency repo with the `gh`/`git` allowlist (it ships in the repo — `git pull` if missing). |
-| Hermes ticks all log `HTTP 429: usage limit reached` | Your provider's quota is exhausted. Switch to a free/API-billed provider: edit `~/.hermes/config.yaml` → `model.provider: openrouter` + set a free model. See § A4. |
-| Hermes ticks log `model not supported` or similar | Wrong model ID for the configured provider. Edit `~/.hermes/config.yaml` → correct `model.default`, then wait for next tick. See § A4. |
-| Issue stuck `in-progress` with an assignee but nobody working it | A coder claimed it then died mid-tick (every agent auths as the same GitHub user, so the assignee is a phantom). The Orchestrator's reclaim step clears it automatically within ~60 min; to unstick now, `gh issue edit <N> --remove-assignee <user> --remove-label blocked`. |
-| Merged PR but its issue stayed open | GitHub's `Closes #N` auto-close is unreliable. The Orchestrator's step 7.5 closes it on the next tick; or close it by hand. |
-| Profile cron jobs never execute (gateway ignores them) | On this machine, Hermes profile-cron isn't auto-run by the gateway — we use **systemd user timers** instead (`hermes-orchestrator-tick.timer`, `hermes-coder-tick.timer`). Check `systemctl --user list-timers`. |
+| CTO never picks up a review (PR or PLAN) | The review issue is missing `role:cto` or is labelled `review`/`ready` instead of `in-progress`. Fix: `gh issue edit <N> --repo <slug> --add-label role:cto --add-label in-progress --remove-label review`. (PLAN reviews are created by the Architect — see `agents/architect.md` Step 3.) |
+| No labels on the project repo | You skipped 2A.2. Run `scripts\setup-project.ps1 -Repo "<slug>"` from Windows. |
+| Wrong project being worked | Hermes: re-paste H2 with corrected slug. Windows: re-run `register-task.ps1`. They must match exactly. |
+| Routine not picking up issues at all | Windows: `Get-ScheduledTask MaxAgency-ClaudeCodeRoutine` → History. Verify `claude --version` and `gh auth status` both work in PowerShell. |
+| Scheduled task opens a visible terminal window | Registered with `LogonType Interactive`. Re-run `register-task.ps1` (now uses `S4U`), or: `$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType S4U -RunLevel Limited; Set-ScheduledTask -TaskName "MaxAgency-ClaudeCodeRoutine" -Principal $p` |
+| Routine output not visible | Log: `<AgencyPath>\logs\claude-routine.log`. Each entry prefixed `=== TICK <timestamp> \| issue=<N> model=<m> ===`. |
+| `register-task.ps1` fails with "positional parameter... GitHub" | PowerShell 5.1 encoding bug — a non-ASCII char in the `.ps1`. Re-pull the agency repo: `git pull`. |
+| Both runtimes grab one issue | Issue has two `assigned:*` labels. Reduce to one, re-add `ready`. |
+| Hermes coder fires every minute but never picks work | Issue needs all three: `in-progress` + `assigned:hermes-coder` + `role:coder`. |
+| Telegram messages never arrive | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` must be in **WSL** `~/.hermes/.env` (not Windows). Check `grep TELEGRAM ~/.hermes/.env`. Until set, escalations go to `~/.hermes/profiles/orchestrator/escalations.log`. |
+| Orchestrator logs `NO_REPO` | `~/.hermes/.env` missing `PROJECT_REPO=...`. Re-run H2. |
+| Orchestrator queue ops (close merged PRs, CTO review, verdict routing) not happening | These are in `orchestrator-mechanics.sh`, not the LLM. Run it manually to see the error: `PROJECT_REPO=owner/repo bash ~/.hermes/profiles/orchestrator/orchestrator-mechanics.sh`. Check stderr for Python tracebacks or `gh` auth errors. |
+| Orchestrator service killed mid-run (`timeout` in journalctl) | `TimeoutStartSec` too low. Re-run `deploy.sh`, or: `sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=300/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. |
+| Phase task issues never appear after kickoff | The kickoff issue lost its `kickoff` label but no child issues exist — step failed silently. Re-add `kickoff` and watch the next tick; idempotency prevents duplicates. |
+| Claude Code routine `401 Invalid authentication credentials` | Claude Code OAuth token expired (~30-day life). Run `claude /login` in PowerShell, sign in. Next tick uses the fresh token. |
+| Routine "succeeds" (result 0) but does no work | It needed a `gh` permission it couldn't get headlessly. Confirm `.claude/settings.json` exists in the agency repo with the `gh`/`git` allowlist (ships in the repo — `git pull` if missing). |
+| Hermes ticks all log `HTTP 429: usage limit reached` | Provider quota exhausted. Switch model/provider in the profile config — see Part 1, step 1.5. |
+| Issue stuck `in-progress` with an assignee but nobody working it | A coder claimed it then died mid-tick (all agents auth as the same GitHub user, so the assignee is a phantom). The reclaim step clears it within ~60 min; to unstick now: `gh issue edit <N> --remove-assignee <user> --remove-label blocked`. |
+| Merged PR but its issue stayed open | GitHub's `Closes #N` auto-close is unreliable. The Orchestrator closes it next tick; or close by hand. |
 
 ---
 
 ## G. Phone workflow
 
-Most PRs are merged automatically — you won't hear anything. You only get a message when the AI decided a human needs to look first (visual changes, things that can't be undone, etc.).
+Most PRs merge automatically — you won't hear anything. You only get a message when the AI decided a human should look first (visual changes, things that can't be undone, money/direction decisions).
 
 **When you get a merge request on Telegram:**
-- Read the two plain-English lines explaining what changed and why you're being asked
-- Open the PR link to see the changes (GitHub shows a visual diff — green = added, red = removed)
-- Reply with: **1** to approve, **2** to send back, **3** if you need it explained more
+- Read the two plain-English lines explaining what changed and why you're being asked.
+- Open the PR link to see the changes (GitHub shows a visual diff — green = added, red = removed).
+- Reply with **1** to approve, **2** to send back, **3** if you need it explained more.
+
+**When you get a plan go-ahead request** (the CTO approved a PLAN), reply **1** to start the work, **2** to request changes, **3** to have it explained.
 
 **Escalations** (something went wrong or the AI is stuck) — reply on Telegram or comment on the linked GitHub issue.
 
 **Status** — read `State.md` in the project repo root.
 
-**Pause a phase** — add label `blocked` to an issue from the GitHub app.
+**Pause a phase** — add the `blocked` label to an issue from the GitHub mobile app.
 
-You should never push code from your phone. If you need to, file an issue — the agents got stuck.
+You should never push code from your phone. If you feel you need to, file an issue — it means the agents got stuck.
