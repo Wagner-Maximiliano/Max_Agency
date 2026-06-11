@@ -210,22 +210,11 @@ The change takes effect on the **next tick** — no restart needed. The global `
 | `nous` | Nous Portal OAuth | |
 | `zai` | `ZAI_API_KEY` | Z.AI / GLM |
 
-### 1.6 — (Optional) Telegram for phone approvals
+### 1.6 — Telegram for phone approvals (nothing to set up)
 
-So `HUMAN-REVIEW: YES` merges and escalations reach your phone instead of only a log file. **These go in WSL `~/.hermes/.env`** (the mechanics script reads them there — Windows env vars do not work for this):
+Max Agency does **not** set up or manage its own Telegram bot. If your Hermes installation already has a Telegram gateway configured (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_HOME_CHANNEL` in WSL `~/.hermes/.env`), the orchestrator automatically reuses it for `HUMAN-REVIEW: YES` merge requests and escalations — no action needed.
 
-```bash
-nano ~/.hermes/.env
-```
-
-Add (create a bot with @BotFather; get the chat ID from `https://api.telegram.org/bot<TOKEN>/getUpdates` after messaging your bot):
-
-```
-TELEGRAM_BOT_TOKEN=123456:ABC-your-bot-token
-TELEGRAM_CHAT_ID=-1001234567890
-```
-
-If these are absent, escalations are written to `~/.hermes/profiles/orchestrator/escalations.log` instead — the system still works, you just have to read the log.
+If Hermes has no Telegram gateway configured, escalations are written to `~/.hermes/profiles/orchestrator/escalations.log` instead — the system still works, you just have to read the log. Don't create a separate bot just for Max Agency; if you want phone approvals, set up Telegram for Hermes itself (see Hermes's own docs) and Max Agency will pick it up automatically on the next tick.
 
 **Environment is ready.** Now do Part 2 to start a project.
 
@@ -560,7 +549,7 @@ rm -rf ~/.hermes-cache/Max_Agency
 | `register-task.ps1` fails with "positional parameter... GitHub" | PowerShell 5.1 encoding bug — a non-ASCII char in the `.ps1`. Re-pull the agency repo: `git pull`. |
 | Both runtimes grab one issue | Issue has two `assigned:*` labels. Reduce to one, re-add `ready`. |
 | Hermes coder fires every minute but never picks work | Issue needs all three: `in-progress` + `assigned:hermes-coder` + `role:coder`. |
-| Telegram messages never arrive | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` must be in **WSL** `~/.hermes/.env` (not Windows). Check `grep TELEGRAM ~/.hermes/.env`. Until set, escalations go to `~/.hermes/profiles/orchestrator/escalations.log`. |
+| Telegram messages never arrive | Max Agency only reuses Hermes's existing gateway — check `grep TELEGRAM ~/.hermes/.env` (in **WSL**, not Windows) for `TELEGRAM_BOT_TOKEN` + `TELEGRAM_HOME_CHANNEL`. If neither is set, escalations go to `~/.hermes/profiles/orchestrator/escalations.log` instead — that's expected, not a bug. |
 | Orchestrator logs `NO_REPO` | `~/.hermes/.env` missing `PROJECT_REPO=...`. Re-run H2. |
 | Orchestrator queue ops (close merged PRs, CTO review, verdict routing) not happening | These are in `orchestrator-mechanics.sh`, not the LLM. Run it manually to see the error: `PROJECT_REPO=owner/repo bash ~/.hermes/profiles/orchestrator/orchestrator-mechanics.sh`. Check stderr for Python tracebacks or `gh` auth errors. |
 | Orchestrator service killed mid-run (`timeout` in journalctl) | `TimeoutStartSec` too low. Re-run `deploy.sh`, or: `sed -i 's/TimeoutStartSec=[0-9]*/TimeoutStartSec=300/' ~/.config/systemd/user/hermes-orchestrator-tick.service && systemctl --user daemon-reload`. |

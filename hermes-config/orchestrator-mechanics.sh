@@ -9,7 +9,10 @@
 # Stderr: verbose log (appended to cron-output.log by the caller).
 #
 # Usage: PROJECT_REPO=owner/repo orchestrator-mechanics.sh
-#        Reads TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID from env if set.
+#        Escalations use Hermes's own Telegram gateway if one is configured
+#        (TELEGRAM_BOT_TOKEN + TELEGRAM_HOME_CHANNEL or TELEGRAM_CHAT_ID in
+#        ~/.hermes/.env). Max Agency does not set this up itself — if Hermes
+#        has no Telegram gateway, escalations go to escalations.log instead.
 
 set -euo pipefail
 
@@ -35,9 +38,10 @@ gh_safe() {
 
 telegram() {
   local msg="$1"
-  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
+  local chat_id="${TELEGRAM_CHAT_ID:-${TELEGRAM_HOME_CHANNEL:-}}"
+  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "$chat_id" ]]; then
     curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-      -d chat_id="${TELEGRAM_CHAT_ID}" -d text="${msg}" >/dev/null
+      -d chat_id="${chat_id}" -d text="${msg}" >/dev/null
   else
     echo "ESCALATION @ $NOW:" >> ~/.hermes/profiles/orchestrator/escalations.log
     echo "$msg" >> ~/.hermes/profiles/orchestrator/escalations.log

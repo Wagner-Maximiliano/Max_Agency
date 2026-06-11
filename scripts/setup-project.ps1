@@ -36,10 +36,10 @@ $labels = @(
 )
 
 foreach ($l in $labels) {
-  try {
-    gh label create $l.name --repo $Repo --color $l.color --description $l.description 2>$null
+  gh label create $l.name --repo $Repo --color $l.color --description $l.description 2>$null
+  if ($LASTEXITCODE -eq 0) {
     Write-Information "Created label $($l.name)" -InformationAction Continue
-  } catch {
+  } else {
     gh label edit $l.name --repo $Repo --color $l.color --description $l.description | Out-Null
     Write-Information "Updated label $($l.name)" -InformationAction Continue
   }
