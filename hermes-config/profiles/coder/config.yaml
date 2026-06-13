@@ -8,7 +8,11 @@ model:
   base_url: https://openrouter.ai/api/v1
   provider: openrouter
   api_mode: chat_completions
-  default: nvidia/nemotron-3-nano-30b-a3b:free
+  # minimax/minimax-m3 = the V2 Model Roster "hermes bulk" model. The previous
+  # free nemotron-nano-30b could not complete coder tasks (claimed issues, then
+  # produced no branch / looped to its iteration cap). minimax-m3 is a capable
+  # reasoning model (~$0.30/M in, $1.20/M out) accessible on this OpenRouter key.
+  default: minimax/minimax-m3
   max_tokens: 16384
 
 goals:
