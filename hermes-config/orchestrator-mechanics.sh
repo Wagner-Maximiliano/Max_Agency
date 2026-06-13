@@ -67,6 +67,71 @@ if [[ "$KICKOFF_COUNT" -gt 0 ]]; then
   log "found $KICKOFF_COUNT kickoff issue(s) — signalling LLM"
 fi
 
+# ── Step 4: Self-heal orphaned kickoffs ──────────────────────────────────────
+# A handoff issue should only reach `planned` once its child task issues exist
+# (the LLM claims it LAST — see orchestrator-tick.md Step 2). If a tick died
+# mid-kickoff under the old claim-first flow — or any future regression strands
+# one — we get a `planned` handoff with zero children, and because the `kickoff`
+# label is gone, no later tick re-processes it (this is what happened to
+# Surviving_The_AI_World #51). Detect that and re-arm it as `kickoff` so the next
+# tick re-runs the (idempotent) creation.
+log "checking for orphaned kickoffs (planned handoff, no child tasks)..."
+PLANNED=$(gh_safe issue list --repo "$REPO" --label planned --state open \
+  --json number,title,body,labels --limit 50)
+
+_heal_out=$(echo "$PLANNED" | python3 -c "
+import json, sys, subprocess
+issues = json.load(sys.stdin)
+repo = '${REPO}'
+rearmed = 0   # orphans re-labelled kickoff
+warned = 0    # anomalies flagged but not re-armed (no phase anchor)
+for issue in issues:
+    body = (issue.get('body','') or '').lower()
+    title = (issue.get('title','') or '').lower()
+    # Only consider orchestrator handoff / kickoff issues.
+    if not ('orchestrator handoff' in body or 'kickoff' in body or 'kickoff' in title):
+        continue
+    num = issue['number']
+    labels = [l['name'] for l in issue.get('labels',[])]
+    phase = next((l for l in labels if l.startswith('phase:')), None)
+    if not phase:
+        # No phase anchor — cannot verify children deterministically. Warn only.
+        subprocess.run(['gh','issue','comment',str(num),'--repo',repo,
+            '--body','WARNING: this handoff is \`planned\` but carries no \`phase:\` label, so the orchestrator cannot verify its child task issues exist. A human should check whether this phase was kicked off.'],
+            capture_output=True)
+        print(f'  WARN: planned handoff #{num} has no phase label', file=sys.stderr)
+        warned += 1
+        continue
+    # Count sibling task issues sharing this phase, in ANY state (so a phase that
+    # legitimately completed — all children merged/closed — is NOT re-armed).
+    # Exclude the handoff issue itself and CTO review meta-issues.
+    sibs = subprocess.run(['gh','issue','list','--repo',repo,'--label',phase,
+        '--state','all','--json','number,labels','--limit','100'],
+        capture_output=True, text=True).stdout.strip()
+    sib_issues = json.loads(sibs) if sibs else []
+    children = [s for s in sib_issues
+               if s['number'] != num
+               and 'role:cto' not in [l['name'] for l in s.get('labels',[])]]
+    if children:
+        continue  # phase has child tasks — healthy, leave as planned
+    # Orphan: re-arm so the next tick re-runs the idempotent kickoff.
+    subprocess.run(['gh','issue','edit',str(num),'--repo',repo,
+        '--remove-label','planned','--add-label','kickoff'], capture_output=True)
+    subprocess.run(['gh','issue','comment',str(num),'--repo',repo,
+        '--body',f'Self-heal: this handoff was \`planned\` with zero child task issues for {phase} — a kickoff likely died mid-creation. Re-labelled \`kickoff\` so the orchestrator re-runs task creation next tick. Step 2 idempotency (title search before each create) makes the re-run safe.'],
+        capture_output=True)
+    print(f'  re-armed orphaned kickoff #{num} ({phase}, no children)', file=sys.stderr)
+    rearmed += 1
+print(f'{rearmed} {warned}')
+" 2>/dev/null) || _heal_out='0 0'
+_rearmed=${_heal_out%% *}; _warned=${_heal_out##* }
+warnings=$(( warnings + _rearmed + _warned ))
+if [[ "$_rearmed" -gt 0 || "$_warned" -gt 0 ]]; then
+  log "self-heal: re-armed $_rearmed orphaned kickoff(s), flagged $_warned"
+  # A re-armed kickoff is a new open kickoff for this same tick's LLM step.
+  kickoffs_found=$(( kickoffs_found + _rearmed ))
+fi
+
 # ── Step 5: Promote ready tasks ──────────────────────────────────────────────
 log "checking backlog for promotable tasks..."
 BACKLOG=$(gh_safe issue list --repo "$REPO" --label backlog --state open \

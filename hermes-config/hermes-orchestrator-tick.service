@@ -7,8 +7,18 @@ Type=oneshot
 EnvironmentFile=/home/hermes/.hermes/.env
 # The Environment= line with the machine-specific PATH is added by Hermes setup.
 # To see the current value: grep ^Environment= ~/.config/systemd/user/hermes-orchestrator-tick.service
-ExecStart=/bin/bash -c 'L=/home/hermes/.hermes/profiles/orchestrator/cron-output.log; echo "=== TICK $(date -Iseconds) ===" >> "$L"; git -C /home/hermes/.hermes-cache/Max_Agency pull --rebase 2>&1 | grep -v "^Already up to date" >> "$L" || true; /home/hermes/.local/bin/hermes -p orchestrator chat -q "$(cat /home/hermes/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" -Q --accept-hooks --yolo --max-turns 10 2>&1 | tail -5 >> "$L"'
-TimeoutStartSec=300
+#
+# --max-turns 40: a kickoff creates one issue per PLAN.md task row, and each task
+# costs ~2 tool iterations (idempotency search + create). The old budget of 10
+# capped a 7-task phase mid-creation ("Reached maximum iterations (10)" in
+# cron-output.log) and stranded the kickoff. 40 matches the profile's
+# goals.max_turns and leaves headroom (mechanics + reads + comment + claim ≈ 20).
+ExecStart=/bin/bash -c 'L=/home/hermes/.hermes/profiles/orchestrator/cron-output.log; echo "=== TICK $(date -Iseconds) ===" >> "$L"; git -C /home/hermes/.hermes-cache/Max_Agency pull --rebase 2>&1 | grep -v "^Already up to date" >> "$L" || true; /home/hermes/.local/bin/hermes -p orchestrator chat -q "$(cat /home/hermes/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" -Q --accept-hooks --yolo --max-turns 40 2>&1 | tail -5 >> "$L"'
+# 600s (was 300): a full kickoff on the free/slow model can need more than the
+# 5-minute timer interval. Type=oneshot means the next timer fire is skipped
+# while this runs, so no concurrent ticks. If it still times out mid-kickoff,
+# claim-last + Step 2c idempotency make the next tick resume safely.
+TimeoutStartSec=600
 
 [Install]
 WantedBy=default.target
