@@ -137,12 +137,19 @@ from datetime import datetime, timezone, timedelta
 issues = json.load(sys.stdin)
 repo = '${REPO}'
 now = datetime.now(timezone.utc)
+# Coder's own per-tick TIMEOUT is 20 minutes (see coder-tick.md). Without a
+# grace period here, a coder that just claimed an issue (no branch pushed
+# yet) gets reclaimed on the very next 5-min orchestrator tick, producing a
+# claim/reclaim loop that never lets the coder finish.
+NO_BRANCH_GRACE_MIN = 25
 for issue in issues:
     num = issue['number']
     if not issue['assignees']: continue
     label_names = [l['name'] for l in issue.get('labels',[])]
     if 'role:cto' in label_names: continue  # CTO reviews have no branch by design
     assignee = issue['assignees'][0]['login']
+    comments = json.loads(subprocess.run(['gh','issue','view',str(num),'--repo',repo,'--comments','--json','comments'],
+        capture_output=True, text=True).stdout or '{}').get('comments', [])
     # Check for branch
     branches = subprocess.run(['gh','api',f'repos/{repo}/branches','--jq','.[].name'],
         capture_output=True, text=True).stdout
@@ -159,10 +166,7 @@ for issue in issues:
                 capture_output=True, text=True).stdout
             has_pr = len(json.loads(prs)) > 0
             if age > 60 and not has_pr:
-                # Count prior reclaims
-                comments = subprocess.run(['gh','issue','view',str(num),'--repo',repo,'--comments','--json','comments','--jq','.[].body'],
-                    capture_output=True, text=True).stdout
-                reclaims = comments.count('Reclaimed:')
+                reclaims = sum(1 for c in comments if 'Reclaimed:' in c.get('body',''))
                 if reclaims >= 3:
                     print(f'ESCALATE #{num}: reclaimed 3+ times, needs human', file=sys.stderr)
                 else:
@@ -172,12 +176,26 @@ for issue in issues:
                         '--body','Reclaimed: branch idle >60m, no PR. Re-dispatching.'], capture_output=True)
                     print(f'  reclaimed #{num} (idle branch, no PR)', file=sys.stderr)
     else:
-        # No branch at all — if assigned, it's a dead claim
-        subprocess.run(['gh','issue','edit',str(num),'--repo',repo,
-            '--remove-assignee',assignee,'--remove-label','blocked'], capture_output=True)
-        subprocess.run(['gh','issue','comment',str(num),'--repo',repo,
-            '--body','Reclaimed: prior claim produced no branch within the tick. Re-dispatching.'], capture_output=True)
-        print(f'  reclaimed #{num} (no branch)', file=sys.stderr)
+        # No branch yet — give the coder a grace period before treating the
+        # claim as dead. Base it on the 'Picked up by Hermes coder' comment
+        # timestamp, not issue createdAt (which predates the claim).
+        pickups = sorted(c['createdAt'] for c in comments if 'Picked up by Hermes coder' in c.get('body',''))
+        if pickups:
+            claimed_at = datetime.fromisoformat(pickups[-1].replace('Z','+00:00'))
+            age = (now - claimed_at).total_seconds() / 60
+        else:
+            age = NO_BRANCH_GRACE_MIN + 1  # no pickup comment found — treat as stale
+        if age < NO_BRANCH_GRACE_MIN:
+            continue
+        reclaims = sum(1 for c in comments if 'Reclaimed:' in c.get('body',''))
+        if reclaims >= 3:
+            print(f'ESCALATE #{num}: reclaimed 3+ times, needs human', file=sys.stderr)
+        else:
+            subprocess.run(['gh','issue','edit',str(num),'--repo',repo,
+                '--remove-assignee',assignee,'--remove-label','blocked'], capture_output=True)
+            subprocess.run(['gh','issue','comment',str(num),'--repo',repo,
+                '--body','Reclaimed: prior claim produced no branch within the tick. Re-dispatching.'], capture_output=True)
+            print(f'  reclaimed #{num} (no branch, idle {age:.0f}m)', file=sys.stderr)
 " 2>&1 | grep -v "^$" >&2 || true
 
 # ── Step 7.5: Close task issues whose PR merged ──────────────────────────────

@@ -26,11 +26,22 @@ Repo: read `PROJECT_REPO` env var. If unset, exit `NO_REPO`.
    ```
    Post a one-line comment: `Picked up by Hermes coder. Worktree: worktrees/hermes/<N>-<slug>. <timestamp>`.
 
-4. **Set up the worktree.**
+4. **Set up the worktree — resume if one already exists for this issue.**
    ```
-   git worktree add worktrees/hermes/<N>-<slug> -b phase-<phase>/<N>-<slug>
-   cd worktrees/hermes/<N>-<slug>
+   git worktree list | grep -- "/<N>-" || true
+   git branch -a | grep -- "/<N>-" || true
    ```
+   - If a worktree `worktrees/hermes/<N>-<slug>` already exists for issue `<N>`: `cd` into it and resume — do **not** create a new worktree or branch. Run `git status` and `git log --oneline -5` to see what prior work exists, then continue from there.
+   - Else if a branch `phase-<phase>/<N>-<slug>` exists (local or `origin/...`) but no worktree: check it out into a worktree instead of creating a new branch:
+     ```
+     git worktree add worktrees/hermes/<N>-<slug> phase-<phase>/<N>-<slug>
+     cd worktrees/hermes/<N>-<slug>
+     ```
+   - Else (first attempt for this issue): pick a slug, then create fresh:
+     ```
+     git worktree add worktrees/hermes/<N>-<slug> -b phase-<phase>/<N>-<slug>
+     cd worktrees/hermes/<N>-<slug>
+     ```
 
 5. **Read the issue body.** `gh issue view <N> --repo $PROJECT_REPO --json title,body,labels`. Restate the acceptance criteria as an internal checklist. If anything is ambiguous, post **one** clarifying comment and exit with status `BLOCKED_CLARIFY <N>`.
 
