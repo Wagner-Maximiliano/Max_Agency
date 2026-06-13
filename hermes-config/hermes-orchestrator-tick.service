@@ -7,7 +7,9 @@ Type=oneshot
 EnvironmentFile=/home/hermes/.hermes/.env
 # The Environment= line with the machine-specific PATH is added by Hermes setup.
 # To see the current value: grep ^Environment= ~/.config/systemd/user/hermes-orchestrator-tick.service
-ExecStart=/bin/bash -c 'L=/home/hermes/.hermes/profiles/orchestrator/cron-output.log; echo "=== TICK $(date -Iseconds) ===" >> "$L"; git -C /home/hermes/.hermes-cache/Max_Agency pull --rebase 2>&1 | grep -v "^Already up to date" >> "$L" || true; /home/hermes/.local/bin/hermes -p orchestrator chat -q "$(cat /home/hermes/.hermes-cache/Max_Agency/hermes-config/poll-prompts/orchestrator-tick.md)" -Q --accept-hooks --yolo --max-turns 10 2>&1 | tail -5 >> "$L"'
+# Pull the cache first, then exec the (freshly-updated) runner. The runner runs
+# mechanics deterministically every tick and only spawns the LLM on kickoffs.
+ExecStart=/bin/bash -c 'git -C /home/hermes/.hermes-cache/Max_Agency pull --rebase >/dev/null 2>&1 || true; exec /bin/bash /home/hermes/.hermes-cache/Max_Agency/hermes-config/orchestrator-tick-runner.sh'
 TimeoutStartSec=300
 
 [Install]

@@ -7,7 +7,9 @@ Type=oneshot
 EnvironmentFile=/home/hermes/.hermes/.env
 # The Environment= line with the machine-specific PATH is added by Hermes setup.
 # To see the current value: grep ^Environment= ~/.config/systemd/user/hermes-coder-tick.service
-ExecStart=/bin/bash -c 'L=/home/hermes/.hermes/profiles/coder/cron-output.log; echo "=== TICK $(date -Iseconds) ===" >> "$L"; /home/hermes/.local/bin/hermes -p coder chat -q "$(cat /home/hermes/.hermes-cache/Max_Agency/hermes-config/poll-prompts/coder-tick.md)" -Q --accept-hooks --yolo --max-turns 30 2>&1 | tail -1 >> "$L"'
+# Pull the cache first, then exec the (freshly-updated) runner. The runner does a
+# cheap GitHub-API pre-check and only spawns the LLM when there is claimable work.
+ExecStart=/bin/bash -c 'git -C /home/hermes/.hermes-cache/Max_Agency pull --rebase >/dev/null 2>&1 || true; exec /bin/bash /home/hermes/.hermes-cache/Max_Agency/hermes-config/coder-tick-runner.sh'
 TimeoutStartSec=1200
 
 [Install]

@@ -53,6 +53,18 @@ try {
   Write-Information "run-tick: queue peek failed ($($_.Exception.Message)); falling back to --model $modelAlias" -InformationAction Continue
 }
 
+# --- Phase 1b: API-budget gate ------------------------------------------------
+# If the cheap queue-peek above found nothing claimable, do NOT launch Claude.
+# Previously Claude Code was started every tick even on an empty queue, burning
+# multiple Claude API calls per 5-min tick just to conclude NO_WORK.
+if (-not $next) {
+  $logDir = Join-Path $AgencyPath "logs"
+  if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+  $logFile = Join-Path $logDir "claude-routine.log"
+  Add-Content -Path $logFile -Value "=== TICK $(Get-Date -Format 'u') | issue=none model=none | NO_WORK (LLM skipped) ===" -Encoding utf8
+  exit 0
+}
+
 # --- Phase 2: substitute env vars into the prompt, run Claude with the model --
 $prompt = (Get-Content $PromptPath -Raw) `
   -replace [regex]::Escape('$env:PROJECT_REPO'), $Repo `
