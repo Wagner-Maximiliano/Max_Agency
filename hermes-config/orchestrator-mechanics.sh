@@ -16,6 +16,11 @@
 
 set -euo pipefail
 
+# Ensure user-local binaries (notably the native `gh`) resolve regardless of how
+# this script is invoked (systemd service env vs. login shell). Without this,
+# some service ticks failed with `gh: command not found` → TICK_FAIL mechanics.
+export PATH="$HOME/.local/bin:$PATH"
+
 REPO="${PROJECT_REPO:?PROJECT_REPO not set}"
 NOW=$(date -u --iso-8601=seconds)
 
@@ -36,18 +41,10 @@ gh_safe() {
   echo "$out"
 }
 
-telegram() {
-  local msg="$1"
-  local chat_id="${TELEGRAM_CHAT_ID:-${TELEGRAM_HOME_CHANNEL:-}}"
-  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "$chat_id" ]]; then
-    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-      -d chat_id="${chat_id}" -d text="${msg}" >/dev/null
-  else
-    echo "ESCALATION @ $NOW:" >> ~/.hermes/profiles/orchestrator/escalations.log
-    echo "$msg" >> ~/.hermes/profiles/orchestrator/escalations.log
-  fi
-  ((escalations++))
-}
+# NOTE: Escalation delivery (Telegram + escalations.log fallback) lives in the
+# Python `notify()` helper inside Step 9's heredoc — that is where every
+# escalation is actually raised. A previous bash `telegram()` function here was
+# dead code (never called), so escalations only ever hit the log file.
 
 # ── Step 1: Heartbeat ────────────────────────────────────────────────────────
 echo "$NOW" > ~/.hermes/profiles/orchestrator/heartbeat.txt
@@ -290,9 +287,27 @@ echo "$CTO_ISSUES" | python3 -c "
 import json, sys, subprocess, re
 from datetime import datetime, timezone, timedelta
 
+import os, urllib.parse, urllib.request
+
 issues = json.load(sys.stdin)
 repo = '${REPO}'
 now = datetime.now(timezone.utc)
+
+ESCAL_LOG = '/home/hermes/.hermes/profiles/orchestrator/escalations.log'
+def notify(log_entry, tg_text=None):
+    # Always append to escalations.log (durable audit trail)...
+    with open(ESCAL_LOG, 'a') as f:
+        f.write(log_entry + '\n\n')
+    # ...then attempt delivery via Hermes's Telegram gateway if configured.
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat = os.environ.get('TELEGRAM_CHAT_ID') or os.environ.get('TELEGRAM_HOME_CHANNEL')
+    if token and chat:
+        try:
+            data = urllib.parse.urlencode({'chat_id': chat, 'text': tg_text or log_entry}).encode()
+            urllib.request.urlopen('https://api.telegram.org/bot' + token + '/sendMessage', data=data, timeout=10)
+            print('  telegram escalation sent', file=sys.stderr)
+        except Exception as e:
+            print('  WARN: telegram send failed (logged to escalations.log): ' + str(e), file=sys.stderr)
 
 for issue in issues:
     num = issue['number']
@@ -360,8 +375,7 @@ for issue in issues:
             # PR merge needs human sign-off — escalate
             pr_url = f'https://github.com/{repo}/pull/{pr_num}'
             msg = f'👀 YOUR EYES NEEDED — {repo}\n\nThe AI completed a task and it passed quality review.\nI need you to approve the final merge — this change may affect the UI or is hard to reverse.\n\n📸 See the changes here: {pr_url}\n🤖 AI quality check: Passed ✅\n\nReply with a number:\n1️⃣ MERGE — looks good, ship it\n2️⃣ REJECT — send it back\n3️⃣ EXPLAIN — break it down for me'
-            with open('/home/hermes/.hermes/profiles/orchestrator/escalations.log','a') as f:
-                f.write(f'ESCALATION @ {now.isoformat()}:\n{msg}\n\n')
+            notify(f'ESCALATION @ {now.isoformat()}:\n{msg}', msg)
             subprocess.run(['gh','issue','close',str(num),'--repo',repo,
                 '--comment','Routed: APPROVED, waiting for human sign-off on merge.'], capture_output=True)
             print(f'  escalated PR #{pr_num} for human merge (HUMAN-REVIEW: YES)', file=sys.stderr)
@@ -369,8 +383,7 @@ for issue in issues:
             # Plan review approved — no PR to merge; needs human go-ahead to start building
             issue_url = f'https://github.com/{repo}/issues/{num}'
             msg = f'👀 YOUR GO-AHEAD NEEDED — {repo}\n\nThe CTO has approved the project PLAN. Before the team starts building, you need to give the green light.\n\n📋 Review the approved plan + CTO notes here: {issue_url}\n🤖 CTO verdict: APPROVED ✅\n\nReply with a number:\n1️⃣ START — plan looks good, begin the work\n2️⃣ CHANGES — I want something adjusted first\n3️⃣ EXPLAIN — walk me through the plan'
-            with open('/home/hermes/.hermes/profiles/orchestrator/escalations.log','a') as f:
-                f.write(f'ESCALATION @ {now.isoformat()}:\n{msg}\n\n')
+            notify(f'ESCALATION @ {now.isoformat()}:\n{msg}', msg)
             subprocess.run(['gh','issue','close',str(num),'--repo',repo,
                 '--comment','Routed: PLAN APPROVED by CTO — waiting for human go-ahead to begin work.'], capture_output=True)
             print(f'  escalated plan review #{num} for human go-ahead (HUMAN-REVIEW: YES)', file=sys.stderr)
@@ -391,8 +404,7 @@ for issue in issues:
             '--comment','Routed: CHANGES REQUIRED sent to task issue.'], capture_output=True)
 
     elif verdict.startswith('ESCALATE'):
-        with open('/home/hermes/.hermes/profiles/orchestrator/escalations.log','a') as f:
-            f.write(f'[PROJECT] {repo}\n[LEVEL] ESCALATE\n[CONTEXT] CTO review #{num}\n[VERDICT] {verdict_body[:200]}\n\n')
+        notify(f'[PROJECT] {repo}\n[LEVEL] ESCALATE\n[CONTEXT] CTO review #{num}\n[VERDICT] {verdict_body[:200]}')
         subprocess.run(['gh','issue','close',str(num),'--repo',repo,
             '--comment','Routed: ESCALATE — logged for human.'], capture_output=True)
         print(f'  ESCALATE on CTO review #{num}', file=sys.stderr)
