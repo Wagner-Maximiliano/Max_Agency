@@ -40,11 +40,34 @@ write power.
 - `classifier.py` — pure state-machine logic (no I/O), fully unit-tested.
 - `executor.py` — pure mutation **planner** (Decision → ops) + thin `gh` **writer** (2B).
 - `gate.py` — runner: lock, `gh` reads, marker/approval parsing, classify, execute, JSONL log.
+- `bench/` — Phase 0 model benchmark harness (see below).
 - `tests/` — `pytest` suite (state table, worked examples, parsing, planner/writer, smoke tests).
 
 ```sh
 python3 -m pytest gate -q
 ```
+
+## Phase 0 — model benchmark harness (`bench/`)
+
+Pure tasks/scorer + a thin runner CLI, evaluating the coder candidate
+(`xiaomi/mimo-v2.5`, fallback `minimax/minimax-m3`) and the orchestrator candidate
+(`gpt-5-mini`, fallback `nvidia/nemotron-3-super-120b-a12b:free`) against 5 tasks each.
+Promotion rule: ≥4/5 pass **and** zero critical failures (secrets / deleted-unrelated /
+ignored-constraints / no-PR / fabricated-structure), else fall back, else keep the live
+model and escalate.
+
+```sh
+python gate/bench/runner.py list                                            # show tasks + candidates
+python gate/bench/runner.py prep --repo OWNER/REPO --role coder             # dry-run issue creation
+python gate/bench/runner.py dispatch --role coder --task-id coder-1 \
+    --repo OWNER/REPO --issue N                                             # dry-run dispatch command
+# add --live to actually create issues / run the harness (hard subprocess timeout, default 30 min)
+```
+
+Status: harness built and unit-tested (25 tests). Live dispatch not yet run.
+`codex` CLI is not present on this host (Windows PATH or WSL) — required before the
+orchestrator candidate can be benchmarked; `build_orchestrator_command` is unverified
+until then. `hermes` (coder candidate, via `wsl.exe`) is available and verified.
 
 ## Not in Phase 2A (deferred on purpose)
 
