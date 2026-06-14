@@ -59,7 +59,11 @@ def _shquote(s: str) -> str:
 def run_with_timeout(cmd: list[str], timeout_s: int) -> dict:
     """Thin: run cmd, hard-kill on timeout. Returns a result dict, never raises on timeout."""
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
+        # wsl.exe / hermes output isn't reliably in the Windows console's locale
+        # encoding (cp1252); decode as UTF-8 and replace anything that isn't,
+        # rather than crashing the reader thread on a stray byte.
+        out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                              errors="replace", timeout=timeout_s)
     except subprocess.TimeoutExpired as e:
         return {
             "returncode": None, "timed_out": True,
@@ -127,6 +131,12 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Harness output (e.g. hermes/wsl) may contain characters the Windows console's
+    # cp1252 stdout can't encode; don't crash the runner over a print().
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
