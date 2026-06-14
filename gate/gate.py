@@ -241,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
         print("NO_REPO: set --repo or PROJECT_REPO", file=sys.stderr)
         return EXIT_AUTH
 
-    run_id = f"{iso(now())}-{uuid.uuid4().hex[:4]}"
+    run_id = f"{now().strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:4]}"
     runtime = Path(args.runtime_dir)
     log_path = runtime / "logs" / "gate" / f"{run_id}.jsonl"
     log_path.parent.mkdir(parents=True, exist_ok=True)
