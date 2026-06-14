@@ -128,9 +128,10 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
   `agents/*.md` + `docs/AMA.md`; fold real safety rules into `CODING_STANDARDS.md`; keep
   role-functional skills.
 - **Phase 2 — Gate beside the old system, in small cuts** (old pollers run until 2F):
-  - **2A** dry-run gate (no power). ✅ **DONE — built, 34 unit tests, validated live.**
-  - **2B** deterministic moves only (label transitions, promotion, merged-close, approval
-    parsing); add idempotency markers. ⬅ next
+  - **2A** dry-run gate (no power). ✅ **DONE — built, unit tests, validated live.**
+  - **2B** deterministic moves only (promotion, merged-close, approval routing) + idempotency
+    markers; no LLM. ✅ **DONE — built, 47 unit tests total, validated live (promote +
+    create-kickoff + idempotency on real issues).**
   - **2C** triage LLM only (+ hard subprocess timeout, mandatory from here on).
   - **2D** coder harness (markers + recovery).
   - **2E** architect/CTO harnesses + plan approval.

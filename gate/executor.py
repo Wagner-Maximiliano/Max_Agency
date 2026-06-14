@@ -1,0 +1,133 @@
+"""Max Agency gate — deterministic action executor (Phase 2B).
+
+Two layers, mirroring the classifier split:
+
+* `plan_actions(decision, ctx, ...)` is **pure**: it turns a Decision into a list of mutation
+  ops (plain dicts). No I/O, fully unit-tested.
+* `GitHubWriter` applies ops via the `gh` CLI. Thin; the runner is injectable for tests.
+
+Phase 2B executes only the **deterministic** actions (no LLM):
+  - would-promote-ready   → backlog → ready
+  - would-close           → close issue (linked PR merged)
+  - would-reopen-architect→ plan-ready → role:architect (+ feedback comment + marker)
+  - would-create-kickoff  → create a linked kickoff issue (+ idempotency marker)
+
+Every LLM action (triage / dispatch-coder / invoke-architect / invoke-cto / recover) produces
+NO ops here — it is logged as deferred and left for the dispatch phases (2C–2E).
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from datetime import datetime, timezone
+
+from classifier import Decision, IssueContext
+
+MARKER_TOKEN = "max-agency-dispatch"
+
+# Actions Phase 2B is allowed to execute. Anything else is deferred (no ops).
+DETERMINISTIC_ACTIONS = {
+    "would-promote-ready",
+    "would-close",
+    "would-reopen-architect",
+    "would-create-kickoff",
+}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def render_marker(fields: dict) -> str:
+    lines = "\n".join(f"{k}: {v}" for k, v in fields.items())
+    return f"<!-- {MARKER_TOKEN}\n{lines}\n-->"
+
+
+def plan_actions(decision: Decision, ctx: IssueContext, run_id: str,
+                 scope_label: str, ts: str | None = None) -> list[dict]:
+    """Pure: map a Decision to deterministic mutation ops. Empty list if nothing to do."""
+    action = decision.intended_action
+    if action not in DETERMINISTIC_ACTIONS:
+        return []  # LLM actions and no-ops are not executed in 2B
+    ts = ts or _now_iso()
+    n = decision.number
+
+    if action == "would-promote-ready":
+        return [{"op": "edit_labels", "issue": n, "add": ["ready"], "remove": ["backlog"]}]
+
+    if action == "would-close":
+        return [{"op": "close", "issue": n, "reason": "completed",
+                 "comment": "Closed by gate: linked PR merged."}]
+
+    if action == "would-reopen-architect":
+        marker = {"run_id": run_id, "issue": n, "status": "changes-routed", "ts": ts}
+        return [
+            {"op": "edit_labels", "issue": n, "add": ["role:architect"],
+             "remove": ["plan-ready"]},
+            {"op": "comment", "issue": n,
+             "body": "Gate: owner requested CHANGES (see latest comment). Routing back to "
+                     "the architect to revise the plan."},
+            {"op": "upsert_marker", "issue": n, "comment_id": ctx.marker_comment_id,
+             "body": render_marker(marker)},
+        ]
+
+    if action == "would-create-kickoff":
+        title = f"[AI-{n}] kickoff: {ctx.title}".strip()
+        body = (f"Auto-created by gate after owner approval.\n\n"
+                f"Approved-plan: #{n}\nPlan: /plans/issue-{n}/PLAN.md\n\n"
+                f"Expand this PLAN into task issues (orchestrator).")
+        marker = {"run_id": run_id, "issue": n, "status": "kickoff-created", "ts": ts}
+        return [
+            {"op": "create_issue", "title": title, "body": body,
+             "labels": [scope_label, "kickoff"]},
+            {"op": "upsert_marker", "issue": n, "comment_id": ctx.marker_comment_id,
+             "body": render_marker(marker)},
+        ]
+
+    return []  # unreachable, but fail safe
+
+
+class GitHubWriter:
+    """Applies mutation ops via the `gh` CLI. Inject `runner` for testing."""
+
+    def __init__(self, repo: str, runner=None, timeout: int = 60):
+        self.repo = repo
+        self._run = runner or self._default_runner
+        self.timeout = timeout
+
+    def _default_runner(self, args: list[str]) -> str:
+        out = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=self.timeout)
+        if out.returncode != 0:
+            raise RuntimeError((out.stderr or "gh failed").strip())
+        return out.stdout
+
+    def apply(self, op: dict) -> None:
+        kind = op["op"]
+        repo = ["--repo", self.repo]
+        if kind == "edit_labels":
+            args = ["issue", "edit", str(op["issue"]), *repo]
+            for lab in op.get("add", []):
+                args += ["--add-label", lab]
+            for lab in op.get("remove", []):
+                args += ["--remove-label", lab]
+            self._run(args)
+        elif kind == "close":
+            self._run(["issue", "close", str(op["issue"]), *repo,
+                       "--reason", op["reason"], "--comment", op["comment"]])
+        elif kind == "comment":
+            self._run(["issue", "comment", str(op["issue"]), *repo, "--body", op["body"]])
+        elif kind == "create_issue":
+            args = ["issue", "create", *repo, "--title", op["title"], "--body", op["body"]]
+            for lab in op.get("labels", []):
+                args += ["--label", lab]
+            self._run(args)
+        elif kind == "upsert_marker":
+            cid = op.get("comment_id")
+            if cid:  # edit the existing per-issue marker in place
+                self._run(["api", f"repos/{self.repo}/issues/comments/{cid}",
+                           "-X", "PATCH", "-f", f"body={op['body']}"])
+            else:
+                self._run(["issue", "comment", str(op["issue"]), *repo, "--body", op["body"]])
+        else:
+            raise ValueError(f"unknown op: {kind}")

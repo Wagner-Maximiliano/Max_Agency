@@ -40,6 +40,12 @@ class IssueContext:
     deps_closed: bool = False
     # role:cto issue whose PR has no verdict comment yet
     cto_verdict_present: bool = False
+    # a kickoff has already been created for this approved plan (marker present)
+    kickoff_created: bool = False
+    # issue title (used by the executor when creating a linked kickoff issue)
+    title: str = ""
+    # comment id of the existing per-issue marker, if any (for in-place edit)
+    marker_comment_id: Optional[str] = None
 
 
 @dataclass
@@ -90,6 +96,8 @@ def classify(ctx: IssueContext) -> Decision:
     # 6. Plan awaiting human approval.
     if "plan-ready" in labels:
         if ctx.approval == "approve":
+            if ctx.kickoff_created:
+                return d("plan-ready", "no-action", "kickoff already created")
             return d("plan-ready", "would-create-kickoff", "owner approved")
         if ctx.approval == "changes":
             return d("plan-ready", "would-reopen-architect", "owner requested changes")

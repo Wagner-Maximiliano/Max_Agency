@@ -1,0 +1,99 @@
+"""Phase 2B: mutation planner (pure) + gh writer argv construction."""
+
+from classifier import Decision, IssueContext, classify
+from executor import GitHubWriter, plan_actions
+
+RUN = "2026-06-14T00:00:00Z-test"
+SCOPE = "AI-GATE-TEST"
+
+
+def dec(num, action, state="s", reason="r", llm=None):
+    return Decision(num, state, action, reason, llm)
+
+
+# ── planner: deterministic actions produce the right ops ──────────────────────
+def test_promote_plan():
+    ops = plan_actions(dec(7, "would-promote-ready"), IssueContext(7), RUN, SCOPE)
+    assert ops == [{"op": "edit_labels", "issue": 7, "add": ["ready"], "remove": ["backlog"]}]
+
+
+def test_close_plan():
+    ops = plan_actions(dec(5, "would-close"), IssueContext(5), RUN, SCOPE)
+    assert ops[0]["op"] == "close" and ops[0]["reason"] == "completed"
+
+
+def test_reopen_architect_plan():
+    ctx = IssueContext(11, marker_comment_id="c1")
+    ops = plan_actions(dec(11, "would-reopen-architect"), ctx, RUN, SCOPE, ts="T")
+    kinds = [o["op"] for o in ops]
+    assert kinds == ["edit_labels", "comment", "upsert_marker"]
+    assert ops[0]["add"] == ["role:architect"] and ops[0]["remove"] == ["plan-ready"]
+    assert "changes-routed" in ops[2]["body"] and ops[2]["comment_id"] == "c1"
+
+
+def test_create_kickoff_plan():
+    ctx = IssueContext(11, title="build a thing", marker_comment_id=None)
+    ops = plan_actions(dec(11, "would-create-kickoff"), ctx, RUN, SCOPE, ts="T")
+    assert ops[0]["op"] == "create_issue"
+    assert ops[0]["labels"] == [SCOPE, "kickoff"]
+    assert "[AI-11] kickoff: build a thing" == ops[0]["title"]
+    assert ops[1]["op"] == "upsert_marker" and "kickoff-created" in ops[1]["body"]
+
+
+def test_llm_actions_produce_no_ops():
+    for action in ("would-triage", "would-dispatch-coder", "would-invoke-architect",
+                   "would-invoke-cto", "would-recover", "no-action"):
+        assert plan_actions(dec(1, action), IssueContext(1), RUN, SCOPE) == []
+
+
+# ── idempotency: once a kickoff marker exists, classifier stops re-creating ───
+def test_kickoff_idempotent_via_marker():
+    base = dict(labels={SCOPE, "plan-ready"}, approval="approve")
+    assert classify(IssueContext(11, **base)).intended_action == "would-create-kickoff"
+    done = classify(IssueContext(11, kickoff_created=True, **base))
+    assert done.intended_action == "no-action"
+    assert plan_actions(done, IssueContext(11, kickoff_created=True, **base), RUN, SCOPE) == []
+
+
+# ── writer: correct gh argv per op (runner mocked) ────────────────────────────
+def _capture():
+    calls = []
+    return calls, (lambda args: calls.append(args) or "")
+
+
+def test_writer_edit_labels():
+    calls, runner = _capture()
+    GitHubWriter("o/r", runner=runner).apply(
+        {"op": "edit_labels", "issue": 7, "add": ["ready"], "remove": ["backlog"]})
+    assert calls[0] == ["issue", "edit", "7", "--repo", "o/r",
+                        "--add-label", "ready", "--remove-label", "backlog"]
+
+
+def test_writer_close():
+    calls, runner = _capture()
+    GitHubWriter("o/r", runner=runner).apply(
+        {"op": "close", "issue": 5, "reason": "completed", "comment": "done"})
+    assert calls[0] == ["issue", "close", "5", "--repo", "o/r",
+                        "--reason", "completed", "--comment", "done"]
+
+
+def test_writer_create_issue():
+    calls, runner = _capture()
+    GitHubWriter("o/r", runner=runner).apply(
+        {"op": "create_issue", "title": "T", "body": "B", "labels": ["AI-GATE-TEST", "kickoff"]})
+    assert calls[0] == ["issue", "create", "--repo", "o/r", "--title", "T", "--body", "B",
+                        "--label", "AI-GATE-TEST", "--label", "kickoff"]
+
+
+def test_writer_upsert_marker_edits_in_place_when_id_known():
+    calls, runner = _capture()
+    GitHubWriter("o/r", runner=runner).apply(
+        {"op": "upsert_marker", "issue": 11, "comment_id": "c9", "body": "M"})
+    assert calls[0] == ["api", "repos/o/r/issues/comments/c9", "-X", "PATCH", "-f", "body=M"]
+
+
+def test_writer_upsert_marker_creates_when_no_id():
+    calls, runner = _capture()
+    GitHubWriter("o/r", runner=runner).apply(
+        {"op": "upsert_marker", "issue": 11, "comment_id": None, "body": "M"})
+    assert calls[0] == ["issue", "comment", "11", "--repo", "o/r", "--body", "M"]

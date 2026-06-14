@@ -27,6 +27,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+import executor
 from classifier import IssueContext, classify
 
 MARKER_TOKEN = "max-agency-dispatch"
@@ -87,6 +88,17 @@ def latest_marker(comments: list[dict]) -> dict | None:
     return markers[-1]  # comments arrive chronological; last marker is newest
 
 
+def find_marker(comments: list[dict]) -> tuple[dict | None, str | None]:
+    """Return (fields, comment_id) of the newest marker comment, or (None, None)."""
+    found: tuple[dict | None, str | None] = (None, None)
+    for c in comments:
+        fields = parse_marker(c.get("body", "") or "")
+        if fields:
+            cid = c.get("id")
+            found = (fields, str(cid) if cid is not None else None)
+    return found
+
+
 def marker_is_active(marker: dict | None, stuck_min: int) -> bool:
     if not marker or marker.get("status") not in {"started", "pr-open"}:
         return False
@@ -127,14 +139,18 @@ def build_context(issue: dict, pr_map: dict, closed_numbers: set[int], stuck_min
     labels = {l["name"] for l in issue.get("labels", [])}
     comments = issue.get("comments", []) or []
     marker = latest_marker(comments)
+    marker_fields, marker_comment_id = find_marker(comments)
     num = issue["number"]
     pr = pr_map.get(num)
     deps = parse_depends_on(issue.get("body", "") or "")
     return IssueContext(
         number=num,
         labels=labels,
+        title=issue.get("title", "") or "",
         approval=parse_approval(comments),
         marker_active=marker_is_active(marker, stuck_min),
+        kickoff_created=bool(marker_fields and marker_fields.get("status") == "kickoff-created"),
+        marker_comment_id=marker_comment_id,
         linked_pr_open=bool(pr and pr["state"] == "OPEN"),
         pr_merged=bool(pr and pr["state"] == "MERGED"),
         deps_closed=bool(deps) and all(d in closed_numbers for d in deps),
@@ -211,8 +227,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Max Agency gate (Phase 2A dry-run)")
     ap.add_argument("--repo", default=os.environ.get("PROJECT_REPO"), help="owner/repo")
     ap.add_argument("--scope-label", default="AI-GATE-TEST")
-    ap.add_argument("--mode", choices=["dry-run"], default="dry-run",
-                    help="2A only implements dry-run")
+    ap.add_argument("--mode", choices=["dry-run", "deterministic-only"], default="dry-run",
+                    help="dry-run prints only; deterministic-only also executes "
+                         "non-LLM moves (promote/close/approval routing)")
     ap.add_argument("--audit-all-open", action="store_true",
                     help="also report open issues that would be ignored (no scope label)")
     ap.add_argument("--stuck-min", type=int, default=60)
@@ -259,9 +276,11 @@ def main(argv: list[str] | None = None) -> int:
 
         pr_map = build_pr_map(prs)
         closed_numbers = {c["number"] for c in closed}
+        writer = executor.GitHubWriter(args.repo) if args.mode == "deterministic-only" else None
 
         log("scan", scoped_issue_count=len(issues))
         counts: dict[str, int] = {}
+        mutations = 0
         for issue in issues:
             ctx = build_context(issue, pr_map, closed_numbers, args.stuck_min)
             decision = classify(ctx)
@@ -273,10 +292,20 @@ def main(argv: list[str] | None = None) -> int:
                 detected_state=decision.detected_state, intended_action=decision.intended_action,
                 reason=decision.reason, llm=decision.llm)
 
+            if writer is not None:
+                ops = executor.plan_actions(decision, ctx, run_id, args.scope_label)
+                for op in ops:
+                    try:
+                        writer.apply(op)
+                        mutations += 1
+                        log("mutation", issue=decision.number, op=op["op"])
+                    except Exception as e:  # one bad write must not halt the board
+                        log("mutation-error", issue=decision.number, op=op["op"], detail=repr(e))
+
         if args.audit_all_open:
             audit_ignored(args, log)
 
-        log("done", counts=counts, dry_run=True, mutations=0)
+        log("done", counts=counts, dry_run=(args.mode == "dry-run"), mutations=mutations)
         return EXIT_OK
     except Exception as e:  # fail-safe: never crash mid-board without a logged reason
         log("unexpected", detail=repr(e))
