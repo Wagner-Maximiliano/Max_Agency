@@ -10,7 +10,7 @@ Baseline scaffold for an autonomous multi-agent developers agency. Hermes hosts 
 
 ```
 agents/                              Role contracts (architect, cto, orchestrator, coder)
-docs/                                Laws, Policies, Protocols, Rules (MDP, AMA, ...)
+docs/                                Laws, Policies, Protocols, Rules (AMA, ...)
 skills/                              Reusable skills agents discover on demand
 hermes-config/                       Hermes-native profile templates, systemd timers, mechanics script
 claude-code-routine/                 Windows Task Scheduler routine for the Anthropic side

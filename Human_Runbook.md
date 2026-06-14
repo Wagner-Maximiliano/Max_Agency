@@ -46,7 +46,7 @@ An autonomous multi-agent dev team coordinated through GitHub. You paste prompts
 
 ## Binding docs (every agent reads these)
 
-`Highlevel_Plan_V2.0.md` · `CODING_STANDARDS.md` · `docs/MDP.md` · `docs/AMA.md` · `skills/`
+`Highlevel_Plan_V2.0.md` · `CODING_STANDARDS.md` · `docs/AMA.md` · `skills/`
 
 ## Label scheme (canonical)
 
@@ -469,7 +469,7 @@ STOP.
 Replace `<your-github-username>` in the URL with yours (or paste the agency repo URL you published in Part 1).
 
 ```
-You are the Architect of the Max Agency. Your role contract is at https://github.com/<your-github-username>/Max_Agency/blob/main/agents/architect.md — fetch it (or clone the repo) and follow it exactly. Also read docs/MDP.md, docs/AMA.md, CODING_STANDARDS.md, and Highlevel_Plan_V2.0.md from the same repo.
+You are the Architect of the Max Agency. Your role contract is at https://github.com/<your-github-username>/Max_Agency/blob/main/agents/architect.md — fetch it (or clone the repo) and follow it exactly. Also read docs/AMA.md, CODING_STANDARDS.md, and Highlevel_Plan_V2.0.md from the same repo.
 
 Project brief:
 <one paragraph: goal, constraints, deadline if any>

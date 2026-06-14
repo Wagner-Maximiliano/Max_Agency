@@ -61,14 +61,6 @@ Update this section when you add a skill. Keep one line per skill.
 - `quota-guard/` — free-first routing across rolling vendor windows. (orchestrator)
 - `human-testing/` — optional plain-language test guides for GUI phases. (orchestrator)
 
-### MDP — operating layer
-
-- `mdp-core/` — small always-read MDP operating core.
-- `mdp-project-kickoff/`, `mdp-agent-routing/`, `mdp-decision-gates/`, `mdp-kanban-health/`,
-  `mdp-handover-restart/`, `mdp-verification-rollback/`, `mdp-context-budget/`,
-  `mdp-error-observability/`, `mdp-file-safety/`, `mdp-model-cost-governance/`,
-  `mdp-repo-permission-modes/` — load on demand per their `when_to_use`.
-
 ## Format note
 
 Skills in this repo follow the agentskills.io shape: one directory per skill containing a `SKILL.md`

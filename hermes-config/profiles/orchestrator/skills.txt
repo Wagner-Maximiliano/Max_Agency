@@ -9,17 +9,3 @@ github-workflow/SKILL.md
 cto-review/SKILL.md
 quota-guard/SKILL.md
 human-testing/SKILL.md
-
-# MDP — operating layer (load on cold start, then on-demand)
-mdp-core/SKILL.md
-mdp-project-kickoff/SKILL.md
-mdp-agent-routing/SKILL.md
-mdp-decision-gates/SKILL.md
-mdp-kanban-health/SKILL.md
-mdp-handover-restart/SKILL.md
-mdp-verification-rollback/SKILL.md
-mdp-context-budget/SKILL.md
-mdp-error-observability/SKILL.md
-mdp-file-safety/SKILL.md
-mdp-model-cost-governance/SKILL.md
-mdp-repo-permission-modes/SKILL.md

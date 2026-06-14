@@ -129,6 +129,21 @@ These override or add to the above. They exist because of how the agency operate
 
 ---
 
+## 13. File safety and verification
+
+- Check whether a target path exists before creating a file. Prefer targeted patches over
+  full-file overwrites on existing files; only overwrite when explicitly required, and say
+  what is being replaced.
+- On case-insensitive filesystems (Windows mounts), check for case-collisions (`AGENTS.md`
+  vs `agents.md`) before creating a file.
+- Before a meaningful change (files, config, infra, data), know how to undo it — automatic,
+  manual, or impossible — before you make it.
+- A task is done only when verification has been run (or its impossibility explained), the
+  result/exit code is recorded, and any warnings are reported honestly — not hidden because
+  the main check passed.
+
+---
+
 ## Enforcement
 
 - **Automated:** formatter, linter, type checker, secret scanner, test suite — all in pre-commit and CI.

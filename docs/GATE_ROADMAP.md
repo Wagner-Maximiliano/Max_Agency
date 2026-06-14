@@ -124,9 +124,11 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
 - **Phase 0 — Doc-truth + model benchmark.** Build a tiny benchmark harness; promote a model only
   if it passes; keep a fallback. Fix doc drift (one source for models/runtime); delete one
   duplicate flow-diagram HTML.
-- **Phase 1 — Cut MDP entirely.** Delete 11 `skills/mdp-*` + `docs/MDP.md`; strip MDP from
-  `agents/*.md` + `docs/AMA.md`; fold real safety rules into `CODING_STANDARDS.md`; keep
-  role-functional skills.
+- **Phase 1 — Cut MDP entirely.** ✅ **DONE.** Deleted 12 `skills/mdp-*` dirs + `docs/MDP.md`;
+  stripped MDP refs from `agents/*.md`, `docs/AMA.md`, `skills/cto-review/SKILL.md`,
+  `Highlevel_Plan_V2.0.md`, `README.md`, `Human_Runbook.md`, and the hermes profile
+  configs/skills.txt; folded the file-safety + verification/rollback rules into
+  `CODING_STANDARDS.md` §13; kept the role-functional skills. 47 unit tests still pass.
 - **Phase 2 — Gate beside the old system, in small cuts** (old pollers run until 2F):
   - **2A** dry-run gate (no power). ✅ **DONE — built, unit tests, validated live.**
   - **2B** deterministic moves only (promotion, merged-close, approval routing) + idempotency

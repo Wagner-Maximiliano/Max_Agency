@@ -37,7 +37,7 @@ For a PR:
 For a plan:
 - `PLAN.md` in full.
 - The human brief that produced it.
-- `CODING_STANDARDS.md`, `docs/MDP.md`, `docs/AMA.md`.
+- `CODING_STANDARDS.md`, `docs/AMA.md`.
 
 ### Stage 2 — Adversarial scan
 

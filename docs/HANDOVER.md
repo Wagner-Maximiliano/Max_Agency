@@ -46,8 +46,11 @@ with no manual label-fixing and no babysitting.
 - **Phase 2B — deterministic moves** ✅ `--mode deterministic-only` executes non-LLM actions:
   `backlog→ready` promotion, close-on-merged-PR, approval routing (`APPROVE`→create linked
   kickoff + idempotency marker; `CHANGES:`→back to `role:architect`). No LLM called.
-- **47 unit tests passing.** Both phases validated live on the `max_agency` repo (test issues
-  created, exercised, then closed).
+- **Phase 1 — MDP cut** ✅ deleted `skills/mdp-*` + `docs/MDP.md`; stripped MDP refs from
+  `agents/*.md`, `docs/AMA.md`, top-level docs, and hermes profile configs; folded the
+  file-safety/verification-rollback rules into `CODING_STANDARDS.md` §13.
+- **47 unit tests passing.** Both gate phases validated live on the `max_agency` repo (test
+  issues created, exercised, then closed).
 
 Pattern to keep: **pure logic (planner/classifier) separated from a thin CLI layer**, so the
 decision logic is unit-testable without network. The thin `gh`/CLI layer is mocked in tests.
@@ -99,11 +102,6 @@ For every phase/sub-phase:
 failures** (commits secrets · deletes unrelated files · ignores constraints · can't open PR ·
 fabricates structure); orchestrator triage ≥4/5 + well-formed task issues. Name a fallback
 per role. Treat GPT-5-mini / mimo-v2.5 as **hypotheses until they pass.**
-
-**Phase 1 — cut MDP (safe early win, low risk).** Delete the 11 `skills/mdp-*` dirs and
-`docs/MDP.md`; strip MDP vocab/personas from `agents/*.md` and `docs/AMA.md`; fold the few
-real safety rules (file no-clobber, verification/rollback) into `CODING_STANDARDS.md`; keep
-the role-functional skills; update `skills/README.md` + profile `skills.txt`.
 
 **Phase 2C — triage LLM (first real LLM call).** Gate invokes the orchestrator (GPT-5-mini)
 for scope-only issues to classify + label, or `needs-human`. **Add a hard subprocess timeout
