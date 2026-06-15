@@ -46,14 +46,27 @@ def build_coder_command(model: str, repo: str, issue: int) -> list[str]:
 
 
 def build_orchestrator_command(model: str, repo: str, issue: int) -> list[str]:
-    """codex exec, single non-interactive run. NOTE: codex CLI invocation is unverified on
-    this host (codex not found on PATH as of Phase 0 prep) -- adjust here once installed."""
+    """codex exec, single non-interactive run.
+
+    -c model_reasoning_effort=low: triage is simple classification, low effort
+    keeps usage-quota consumption down (verified against gpt-5.5, the only model
+    this host's ChatGPT-account Codex login currently accepts).
+    -s danger-full-access: triage applies labels/comments via `gh`, which needs
+    network + no sandbox approval prompts (mirrors hermes's --yolo).
+    --skip-git-repo-check: the target repo isn't necessarily checked out locally.
+    """
     prompt = (
         f"Triage GitHub issue #{issue} in {repo}: read it, classify it per the Max Agency "
         "gate state machine (role:coder / role:architect / needs-human), and apply the "
         "resulting label(s) with a one-line comment explaining the classification."
     )
-    return ["codex", "exec", "-m", model, prompt]
+    return [
+        "codex", "exec", "-m", model,
+        "-c", "model_reasoning_effort=low",
+        "-s", "danger-full-access",
+        "--skip-git-repo-check",
+        prompt,
+    ]
 
 
 def _shquote(s: str) -> str:

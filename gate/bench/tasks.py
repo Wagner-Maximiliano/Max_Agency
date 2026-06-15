@@ -280,7 +280,7 @@ MODEL_CANDIDATES = {
         "fallback": "minimax/minimax-m3",
     },
     "orchestrator": {
-        "primary": "gpt-5-mini",
+        "primary": "gpt-5.5",
         "fallback": "nvidia/nemotron-3-super-120b-a12b:free",
     },
 }

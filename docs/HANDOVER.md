@@ -18,7 +18,7 @@ work. Concretely, the finished system is:
 - **One human-facing label `AI`** = opt-in + scope + kill-switch. The human's entire daily
   interface is: open a normal GitHub issue, add `AI`, and reply to issues (`APPROVE` /
   `CHANGES:` / answers). No PowerShell for daily work, no labels to learn.
-- **Multi-vendor, used deliberately:** orchestrator = Codex **GPT-5-mini**; coder =
+- **Multi-vendor, used deliberately:** orchestrator = Codex **gpt-5.5**; coder =
   OpenRouter **`xiaomi/mimo-v2.5`** (run via hermes in WSL); architect + CTO = **Claude
   Opus**. Cross-vendor review (Claude reviews GPT/mimo work) is a feature.
 - **MDP deleted.** One-command onboarding. Old polling daemons retired.
@@ -65,7 +65,7 @@ decision logic is unit-testable without network. The thin `gh`/CLI layer is mock
 - CLIs available (this is the point of running locally — actually exercise them):
   - `gh` authed on **both** Windows and WSL.
   - `claude` (Claude Opus) — architect/CTO harness.
-  - `codex` (GPT-5-mini) — orchestrator harness.
+  - `codex` (gpt-5.5, ChatGPT-account auth) — orchestrator harness.
   - `wsl.exe → hermes -p coder` (OpenRouter `xiaomi/mimo-v2.5`) — coder harness.
   - `python3` — runs the gate.
 - Scope label: **`AI-GATE-TEST`** during phases 2A–2E. It flips to **`AI`** only at 2F when
@@ -97,13 +97,14 @@ For every phase/sub-phase:
 
 ## 6. Remaining work (in order)
 
-**Phase 0 — model benchmark (do before 2C/2D dispatch real models).** Build a tiny harness
-(~5 real tasks). Promote a model only if it passes: coder ≥4/5 with **zero critical
-failures** (commits secrets · deletes unrelated files · ignores constraints · can't open PR ·
-fabricates structure); orchestrator triage ≥4/5 + well-formed task issues. Name a fallback
-per role. Treat GPT-5-mini / mimo-v2.5 as **hypotheses until they pass.**
+**Phase 0 — model benchmark (do before 2C/2D dispatch real models).** 🟡 Coder done:
+`xiaomi/mimo-v2.5` scored 5/5, **promoted** (replaces interim `minimax/minimax-m3`).
+Orchestrator candidate updated to `gpt-5.5` (the only model this host's ChatGPT-account
+Codex login accepts — `gpt-5-mini` and other `gpt-5*` variants are rejected), low
+reasoning effort; live triage benchmark (≥4/5 + well-formed task issues) not yet run.
+Name a fallback per role. Treat `gpt-5.5` as a **hypothesis until it passes.**
 
-**Phase 2C — triage LLM (first real LLM call).** Gate invokes the orchestrator (GPT-5-mini)
+**Phase 2C — triage LLM (first real LLM call).** Gate invokes the orchestrator (gpt-5.5)
 for scope-only issues to classify + label, or `needs-human`. **Add a hard subprocess timeout
 here — mandatory for every LLM/CLI call from now on** (a hung `claude`/`codex`/`wsl→hermes`
 must never freeze the gate). Add a `dispatch-enabled` mode.

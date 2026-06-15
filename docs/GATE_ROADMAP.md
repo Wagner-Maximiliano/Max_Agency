@@ -126,9 +126,12 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
   (issues #4-#8, PRs #9-#13), zero critical failures, **promoted** — now
   `model.default` in `hermes-config/profiles/coder/config.yaml` and the live
   `~/.hermes/profiles/coder/config.yaml` (was `minimax/minimax-m3`, the interim
-  patch from `b36d723`; that stays the named fallback). Remaining: orchestrator
-  benchmark (`gpt-5-mini`, blocked on installing/authenticating the `codex` CLI);
-  delete one duplicate flow-diagram HTML
+  patch from `b36d723`; that stays the named fallback). `codex` CLI now installed
+  and authenticated (ChatGPT-account login, only `gpt-5.5` accepted — `gpt-5-mini`
+  and other `gpt-5*` variants rejected). Orchestrator candidate updated to
+  `gpt-5.5` (low reasoning effort); `build_orchestrator_command` verified.
+  Remaining: run the live orchestrator (triage) benchmark; delete one duplicate
+  flow-diagram HTML
   (`max-agency-flow-diagram.html` vs `max-agency-flow-diagram(Production).html`).
 - **Phase 1 — Cut MDP entirely.** ✅ **DONE.** Deleted 12 `skills/mdp-*` dirs + `docs/MDP.md`;
   stripped MDP refs from `agents/*.md`, `docs/AMA.md`, `skills/cto-review/SKILL.md`,
