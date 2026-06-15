@@ -64,10 +64,16 @@ python gate/bench/runner.py dispatch --role coder --task-id coder-1 \
 # add --live to actually create issues / run the harness (hard subprocess timeout, default 30 min)
 ```
 
-Status: harness built and unit-tested (25 tests). Live dispatch not yet run.
-`codex` CLI is not present on this host (Windows PATH or WSL) — required before the
-orchestrator candidate can be benchmarked; `build_orchestrator_command` is unverified
-until then. `hermes` (coder candidate, via `wsl.exe`) is available and verified.
+Status: harness built and unit-tested (72 tests). **Coder benchmark complete:**
+`xiaomi/mimo-v2.5` scored 5/5 on `Wagner-Maximiliano/MDP-Massive-Development-Plan`
+(PRs #9-#13, issues #4-#8), zero critical failures — **promoted** and now the live
+`model.default` in `hermes-config/profiles/coder/config.yaml` (and the matching
+`~/.hermes/profiles/coder/config.yaml`), replacing the interim `minimax/minimax-m3`
+patch from commit `b36d723`. `minimax/minimax-m3` remains the named fallback.
+
+Orchestrator benchmark not yet run: `codex` CLI is not present on this host (Windows
+PATH or WSL) — required before the orchestrator candidate (`gpt-5-mini`) can be
+benchmarked; `build_orchestrator_command` is unverified until then.
 
 ## Not in Phase 2A (deferred on purpose)
 

@@ -121,9 +121,15 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
 
 ## Phased plan (boring, sequential, reversible)
 
-- **Phase 0 — Doc-truth + model benchmark.** Build a tiny benchmark harness; promote a model only
-  if it passes; keep a fallback. Fix doc drift (one source for models/runtime); delete one
-  duplicate flow-diagram HTML.
+- **Phase 0 — Doc-truth + model benchmark.** 🟡 **PARTIAL.** Coder benchmark done:
+  `xiaomi/mimo-v2.5` scored 5/5 on `Wagner-Maximiliano/MDP-Massive-Development-Plan`
+  (issues #4-#8, PRs #9-#13), zero critical failures, **promoted** — now
+  `model.default` in `hermes-config/profiles/coder/config.yaml` and the live
+  `~/.hermes/profiles/coder/config.yaml` (was `minimax/minimax-m3`, the interim
+  patch from `b36d723`; that stays the named fallback). Remaining: orchestrator
+  benchmark (`gpt-5-mini`, blocked on installing/authenticating the `codex` CLI);
+  delete one duplicate flow-diagram HTML
+  (`max-agency-flow-diagram.html` vs `max-agency-flow-diagram(Production).html`).
 - **Phase 1 — Cut MDP entirely.** ✅ **DONE.** Deleted 12 `skills/mdp-*` dirs + `docs/MDP.md`;
   stripped MDP refs from `agents/*.md`, `docs/AMA.md`, `skills/cto-review/SKILL.md`,
   `Highlevel_Plan_V2.0.md`, `README.md`, `Human_Runbook.md`, and the hermes profile

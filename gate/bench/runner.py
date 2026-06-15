@@ -38,7 +38,11 @@ def build_coder_command(model: str, repo: str, issue: int) -> list[str]:
         f"hermes -p coder chat -q {_shquote(prompt)} -m {model} -Q "
         "--accept-hooks --yolo --max-turns 30"
     )
-    return ["wsl.exe", "-e", "bash", "-lc", hermes_cmd]
+    # Mirror the production systemd unit's `EnvironmentFile=~/.hermes/.env`:
+    # hermes reads provider credentials via os.getenv(), which only sees
+    # vars exported into the process environment, not the .env file itself.
+    full_cmd = f"set -a; source ~/.hermes/.env; set +a; {hermes_cmd}"
+    return ["wsl.exe", "-e", "bash", "-lc", full_cmd]
 
 
 def build_orchestrator_command(model: str, repo: str, issue: int) -> list[str]:
