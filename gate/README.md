@@ -51,7 +51,7 @@ python3 -m pytest gate -q
 
 Pure tasks/scorer + a thin runner CLI, evaluating the coder candidate
 (`xiaomi/mimo-v2.5`, fallback `minimax/minimax-m3`) and the orchestrator candidate
-(`gpt-5.5`, fallback `nvidia/nemotron-3-super-120b-a12b:free`) against 5 tasks each.
+(`gpt-5.4-mini`, fallback `nvidia/nemotron-3-super-120b-a12b:free`) against 5 tasks each.
 Promotion rule: ≥4/5 pass **and** zero critical failures (secrets / deleted-unrelated /
 ignored-constraints / no-PR / fabricated-structure), else fall back, else keep the live
 model and escalate.
@@ -71,14 +71,20 @@ Status: harness built and unit-tested (72 tests). **Coder benchmark complete:**
 `~/.hermes/profiles/coder/config.yaml`), replacing the interim `minimax/minimax-m3`
 patch from commit `b36d723`. `minimax/minimax-m3` remains the named fallback.
 
-Orchestrator benchmark not yet run. `codex` CLI is now installed and authenticated
-(ChatGPT-account login, `codex-cli 0.139.0`). Note: this account's Codex login only
-accepts `gpt-5.5` — `gpt-5-mini`, `gpt-5`, `gpt-5-codex`, and `gpt-5-codex-mini` are
-all rejected ("not supported when using Codex with a ChatGPT account"). The
-orchestrator candidate is therefore `gpt-5.5` with `-c model_reasoning_effort=low`
-(triage is simple classification; low effort reduces usage-quota consumption).
-`build_orchestrator_command` verified against the real CLI (`-s danger-full-access`
-for `gh` label/comment writes, `--skip-git-repo-check`).
+Orchestrator benchmark not yet run. `codex` CLI (`codex-cli 0.139.0`) installed and
+authenticated on the real host (ChatGPT-account login). Model availability verified
+live on that host: `gpt-5.4-mini` works, while `gpt-5-mini` is **rejected** with
+HTTP 400 ("not supported when using Codex with a ChatGPT account"). The orchestrator
+candidate is therefore `gpt-5.4-mini` (cheapest accepted variant) with
+`-c model_reasoning_effort=low` (triage is simple classification; low effort reduces
+usage-quota consumption). `build_orchestrator_command` verified against the real CLI
+(`-s danger-full-access` for `gh` label/comment writes, `--skip-git-repo-check`).
+
+> **Environment note:** codex auth and model availability are host-specific, so the
+> orchestrator benchmark must be run on the real host where the gate will run, not in
+> a sandboxed dev environment. The benchmark issues (`[BENCH-TRIAGE-1..5]`, issues
+> #14–#18 on `Wagner-Maximiliano/MDP-Massive-Development-Plan`) are created and ready;
+> the live triage run is pending execution on the host.
 
 ## Not in Phase 2A (deferred on purpose)
 

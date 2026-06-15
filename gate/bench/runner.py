@@ -49,8 +49,9 @@ def build_orchestrator_command(model: str, repo: str, issue: int) -> list[str]:
     """codex exec, single non-interactive run.
 
     -c model_reasoning_effort=low: triage is simple classification, low effort
-    keeps usage-quota consumption down (verified against gpt-5.5, the only model
-    this host's ChatGPT-account Codex login currently accepts).
+    keeps usage-quota consumption down. Default model gpt-5.4-mini is the cheapest
+    variant this account's ChatGPT-account Codex login accepts (verified live on
+    the real host: `gpt-5.4-mini` works, `gpt-5-mini` is rejected with HTTP 400).
     -s danger-full-access: triage applies labels/comments via `gh`, which needs
     network + no sandbox approval prompts (mirrors hermes's --yolo).
     --skip-git-repo-check: the target repo isn't necessarily checked out locally.

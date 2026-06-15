@@ -13,7 +13,7 @@ state, LLMs called only when needed, one `AI` label as the human interface, MDP 
 **Decisions locked in:**
 - Keep all **3 vendors** (Claude, Codex, OpenRouter) — multi-vendor cross-review is a strength.
 - **Candidate** models (to be *benchmarked, not assumed* — see Phase 0): orchestrator =
-  GPT-5-mini (Codex); coder = `xiaomi/mimo-v2.5` (OpenRouter); CTO + Architect = Claude Opus.
+  `gpt-5.4-mini` (Codex); coder = `xiaomi/mimo-v2.5` (OpenRouter); CTO + Architect = Claude Opus.
 - One scheduled **deterministic gate** dispatches; workers never self-schedule.
 - Single opt-in label **`AI`** = human on-switch + gate scope filter + kill-switch.
 - Plan approval via GitHub comment. **Cut MDP entirely.**
@@ -126,12 +126,16 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
   (issues #4-#8, PRs #9-#13), zero critical failures, **promoted** — now
   `model.default` in `hermes-config/profiles/coder/config.yaml` and the live
   `~/.hermes/profiles/coder/config.yaml` (was `minimax/minimax-m3`, the interim
-  patch from `b36d723`; that stays the named fallback). `codex` CLI now installed
-  and authenticated (ChatGPT-account login, only `gpt-5.5` accepted — `gpt-5-mini`
-  and other `gpt-5*` variants rejected). Orchestrator candidate updated to
-  `gpt-5.5` (low reasoning effort); `build_orchestrator_command` verified.
-  Remaining: run the live orchestrator (triage) benchmark; delete one duplicate
-  flow-diagram HTML
+  patch from `b36d723`; that stays the named fallback). `codex` CLI installed and
+  authenticated on the real host (ChatGPT-account login, `codex-cli 0.139.0`).
+  Model availability verified live on that host: `gpt-5.4-mini` works, `gpt-5-mini`
+  is rejected (HTTP 400 "not supported when using Codex with a ChatGPT account").
+  Orchestrator candidate is therefore `gpt-5.4-mini` (cheapest accepted variant,
+  low reasoning effort); `build_orchestrator_command` verified. **Note:** codex auth
+  and model availability are host-specific — the live triage benchmark must run on
+  the real host, not a sandboxed dev environment. Benchmark issues `[BENCH-TRIAGE-1..5]`
+  (#14-#18) are created and ready. Remaining: run the live orchestrator (triage)
+  benchmark on the host; delete one duplicate flow-diagram HTML
   (`max-agency-flow-diagram.html` vs `max-agency-flow-diagram(Production).html`).
 - **Phase 1 — Cut MDP entirely.** ✅ **DONE.** Deleted 12 `skills/mdp-*` dirs + `docs/MDP.md`;
   stripped MDP refs from `agents/*.md`, `docs/AMA.md`, `skills/cto-review/SKILL.md`,

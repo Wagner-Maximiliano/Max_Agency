@@ -19,10 +19,10 @@ def test_build_coder_command_uses_wsl_hermes_with_model_and_issue():
 
 
 def test_build_orchestrator_command_uses_codex_with_model_and_issue():
-    cmd = runner.build_orchestrator_command("gpt-5.5", "owner/repo", 7)
+    cmd = runner.build_orchestrator_command("gpt-5.4-mini", "owner/repo", 7)
     assert cmd[0] == "codex"
     assert "exec" in cmd
-    assert "gpt-5.5" in cmd
+    assert "gpt-5.4-mini" in cmd
     assert "danger-full-access" in cmd
     assert any("#7 in owner/repo" in part for part in cmd)
 

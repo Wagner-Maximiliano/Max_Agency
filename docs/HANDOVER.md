@@ -18,7 +18,7 @@ work. Concretely, the finished system is:
 - **One human-facing label `AI`** = opt-in + scope + kill-switch. The human's entire daily
   interface is: open a normal GitHub issue, add `AI`, and reply to issues (`APPROVE` /
   `CHANGES:` / answers). No PowerShell for daily work, no labels to learn.
-- **Multi-vendor, used deliberately:** orchestrator = Codex **gpt-5.5**; coder =
+- **Multi-vendor, used deliberately:** orchestrator = Codex **gpt-5.4-mini**; coder =
   OpenRouter **`xiaomi/mimo-v2.5`** (run via hermes in WSL); architect + CTO = **Claude
   Opus**. Cross-vendor review (Claude reviews GPT/mimo work) is a feature.
 - **MDP deleted.** One-command onboarding. Old polling daemons retired.
@@ -65,7 +65,7 @@ decision logic is unit-testable without network. The thin `gh`/CLI layer is mock
 - CLIs available (this is the point of running locally — actually exercise them):
   - `gh` authed on **both** Windows and WSL.
   - `claude` (Claude Opus) — architect/CTO harness.
-  - `codex` (gpt-5.5, ChatGPT-account auth) — orchestrator harness.
+  - `codex` (gpt-5.4-mini, ChatGPT-account auth) — orchestrator harness.
   - `wsl.exe → hermes -p coder` (OpenRouter `xiaomi/mimo-v2.5`) — coder harness.
   - `python3` — runs the gate.
 - Scope label: **`AI-GATE-TEST`** during phases 2A–2E. It flips to **`AI`** only at 2F when
@@ -99,12 +99,14 @@ For every phase/sub-phase:
 
 **Phase 0 — model benchmark (do before 2C/2D dispatch real models).** 🟡 Coder done:
 `xiaomi/mimo-v2.5` scored 5/5, **promoted** (replaces interim `minimax/minimax-m3`).
-Orchestrator candidate updated to `gpt-5.5` (the only model this host's ChatGPT-account
-Codex login accepts — `gpt-5-mini` and other `gpt-5*` variants are rejected), low
-reasoning effort; live triage benchmark (≥4/5 + well-formed task issues) not yet run.
-Name a fallback per role. Treat `gpt-5.5` as a **hypothesis until it passes.**
+Orchestrator candidate is `gpt-5.4-mini` (cheapest variant this host's ChatGPT-account
+Codex login accepts — `gpt-5-mini` is rejected with HTTP 400), low reasoning effort;
+live triage benchmark (≥4/5 + well-formed task issues) not yet run. **Run it on the
+real host** — codex auth/model availability is host-specific, not reproducible in a
+sandbox. Benchmark issues `[BENCH-TRIAGE-1..5]` (#14-#18) are created and ready. Name a
+fallback per role. Treat `gpt-5.4-mini` as a **hypothesis until it passes.**
 
-**Phase 2C — triage LLM (first real LLM call).** Gate invokes the orchestrator (gpt-5.5)
+**Phase 2C — triage LLM (first real LLM call).** Gate invokes the orchestrator (gpt-5.4-mini)
 for scope-only issues to classify + label, or `needs-human`. **Add a hard subprocess timeout
 here — mandatory for every LLM/CLI call from now on** (a hung `claude`/`codex`/`wsl→hermes`
 must never freeze the gate). Add a `dispatch-enabled` mode.
