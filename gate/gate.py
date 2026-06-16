@@ -27,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -155,6 +156,7 @@ def build_context(issue: dict, pr_map: dict, closed_numbers: set[int], stuck_min
         approval=parse_approval(comments),
         marker_active=marker_is_active(marker, stuck_min),
         kickoff_created=bool(marker_fields and marker_fields.get("status") == "kickoff-created"),
+        attempt=_marker_attempt(marker_fields),
         marker_comment_id=marker_comment_id,
         linked_pr_open=bool(pr and pr["state"] == "OPEN"),
         pr_merged=bool(pr and pr["state"] == "MERGED"),
@@ -165,6 +167,14 @@ def build_context(issue: dict, pr_map: dict, closed_numbers: set[int], stuck_min
             for c in comments
         ),
     )
+
+
+def _marker_attempt(marker_fields: dict | None) -> int:
+    """The coder attempt count recorded in the latest marker (0 if absent/unparseable)."""
+    if not marker_fields:
+        return 0
+    raw = str(marker_fields.get("attempt", "")).strip()
+    return int(raw) if raw.isdigit() else 0
 
 
 def parse_depends_on(body: str) -> list[int]:
@@ -246,6 +256,15 @@ def main(argv: list[str] | None = None) -> int:
                          "override via --triage-model or $GATE_TRIAGE_MODEL)")
     ap.add_argument("--llm-timeout", type=int, default=harness.DEFAULT_LLM_TIMEOUT_S,
                     help="hard timeout (s) per LLM/CLI call; a hung harness is killed")
+    ap.add_argument("--coder-model", default=harness.DEFAULT_CODER_MODEL,
+                    help="coder model dispatched via wsl->hermes (default: benchmarked "
+                         "xiaomi/mimo-v2.5, override via --coder-model or $GATE_CODER_MODEL)")
+    ap.add_argument("--coder-timeout", type=int, default=harness.DEFAULT_CODER_TIMEOUT_S,
+                    help="hard timeout (s) for one coder run (does real work; default 1800). "
+                         "When dispatching, set --stale-min >= this/60 so the lock isn't "
+                         "reclaimed mid-build")
+    ap.add_argument("--max-attempts", type=int, default=3,
+                    help="coder dispatch attempts before a stuck issue is parked needs-human")
     ap.add_argument("--runtime-dir", default="runtime")
     args = ap.parse_args(argv)
 
@@ -294,6 +313,9 @@ def main(argv: list[str] | None = None) -> int:
         log("scan", scoped_issue_count=len(issues))
         counts: dict[str, int] = {}
         mutations = 0
+        # At most one coder is dispatched per tick (roadmap: "for one ready issue") — a coder
+        # run is long and synchronous; fanning out would serialize 30-min builds per tick.
+        coder_dispatched = False
         for issue in issues:
             ctx = build_context(issue, pr_map, closed_numbers, args.stuck_min)
             decision = classify(ctx)
@@ -315,10 +337,23 @@ def main(argv: list[str] | None = None) -> int:
                     except Exception as e:  # one bad write must not halt the board
                         log("mutation-error", issue=decision.number, op=op["op"], detail=repr(e))
 
-                # Phase 2C: the only LLM action wired in so far is triage. A failed/hung/
-                # unparsed triage is a no-op (logged, retried next tick) — never fatal.
-                if args.mode == "dispatch-enabled" and decision.intended_action == "would-triage":
-                    mutations += dispatch_triage(writer, issue, decision, args, log)
+                # Phase 2C/2D LLM-dispatch actions (only in dispatch-enabled mode). Each is
+                # fail-safe: a hung/failed harness is a logged no-op, retried next tick.
+                if args.mode == "dispatch-enabled":
+                    act = decision.intended_action
+                    if act == "would-triage":
+                        mutations += dispatch_triage(writer, issue, decision, args, log)
+                    elif act == "would-recover" and ctx.attempt >= args.max_attempts:
+                        # Cheap (label + comment), not a coder run — never budget-limited.
+                        mutations += escalate_coder(writer, ctx, decision, run_id, args, log)
+                    elif act in ("would-dispatch-coder", "would-recover"):
+                        if coder_dispatched:
+                            log("coder-deferred-this-tick", issue=decision.number, action=act)
+                        else:
+                            from_label = "ready" if act == "would-dispatch-coder" else "in-progress"
+                            mutations += dispatch_coder(writer, ctx, decision, run_id,
+                                                        args, log, from_label)
+                            coder_dispatched = True
 
         if args.audit_all_open:
             audit_ignored(args, log)
@@ -373,6 +408,70 @@ def dispatch_triage(writer, issue: dict, decision, args, log) -> int:
             if op["op"] == "edit_labels":
                 break
     return mutations
+
+
+def _apply_ops(writer, n: int, ops: list[dict], log) -> int:
+    """Apply mutation ops fail-safe; abort if the state-changing edit_labels fails (so a
+    follow-on comment/marker can't spam every tick). Returns the count applied."""
+    mutations = 0
+    for op in ops:
+        try:
+            writer.apply(op)
+            mutations += 1
+            log("mutation", issue=n, op=op["op"])
+        except Exception as e:  # one bad write must not halt the board
+            log("mutation-error", issue=n, op=op["op"], detail=repr(e))
+            if op["op"] == "edit_labels":
+                break  # claim/label didn't land; don't post the trailing comment/marker
+    return mutations
+
+
+def dispatch_coder(writer, ctx, decision, run_id, args, log, from_label) -> int:
+    """Claim a coder issue (label + in-flight marker) then run the coder under a hard timeout.
+
+    Fail-safe: a hung/failed coder is a logged outcome, never fatal. No post-run marker
+    write — recovery is driven next tick by marker-staleness + PR presence. `from_label`
+    is `ready` for a fresh dispatch, `in-progress` for a recovery re-dispatch.
+    """
+    n = decision.number
+    attempt = ctx.attempt + 1  # marker records the new attempt before the blocking run
+    model = args.coder_model
+
+    # 1. Claim: label move + in-flight marker (label first; abort if the claim fails).
+    start_ops = executor.plan_coder_dispatch_ops(
+        n, attempt, run_id, model, ctx.marker_comment_id, from_label)
+    mutations = _apply_ops(writer, n, start_ops, log)
+    if mutations < len(start_ops):
+        return mutations  # claim didn't fully land; next tick retries cleanly
+
+    # 2. Dispatch the coder (blocking, hard timeout). Only the integer issue number reaches
+    #    the command; hermes reads the untrusted issue text itself via gh (least exposure).
+    #    Run from a NEUTRAL temp dir, never the gate's repo: the coder does git/gh under
+    #    --yolo and a child launched from our checkout would mutate it (wsl.exe starts in
+    #    the translated Windows cwd). Same safeguard the Phase 0 orchestrator got.
+    branch = harness.coder_branch(n, attempt)
+    log("coder-dispatch", issue=n, attempt=attempt, model=model, branch=branch,
+        timeout_s=args.coder_timeout)
+    cmd = harness.build_coder_command(model, args.repo, n, attempt)
+    with tempfile.TemporaryDirectory(prefix="maxagency-coder-") as neutral_cwd:
+        result = harness.run_llm(cmd, args.coder_timeout, cwd=neutral_cwd)
+
+    if result["timed_out"]:
+        log("coder-timeout", issue=n, attempt=attempt, timeout_s=args.coder_timeout)
+    elif result["returncode"] not in (0, None):
+        log("coder-failed", issue=n, attempt=attempt, returncode=result["returncode"],
+            detail=(result["stderr"] or "")[:300])
+    else:
+        log("coder-done", issue=n, attempt=attempt, returncode=result["returncode"])
+    return mutations
+
+
+def escalate_coder(writer, ctx, decision, run_id, args, log) -> int:
+    """Retry cap reached for a stuck coder issue → park it `needs-human`."""
+    n = decision.number
+    log("coder-escalate", issue=n, attempt=ctx.attempt, max_attempts=args.max_attempts)
+    ops = executor.plan_recovery_escalation_ops(n, ctx.attempt, run_id, ctx.marker_comment_id)
+    return _apply_ops(writer, n, ops, log)
 
 
 def issue_label_names(issue: dict) -> list[str]:

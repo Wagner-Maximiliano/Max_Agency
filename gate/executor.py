@@ -116,6 +116,51 @@ def plan_triage_ops(issue_number: int, label: str, reason: str) -> list[dict]:
     return ops
 
 
+# ── Phase 2D: coder dispatch + recovery ───────────────────────────────────────
+def _coder_marker(issue: int, attempt: int, run_id: str, model: str,
+                  status: str, ts: str) -> dict:
+    return {"run_id": run_id, "issue": issue, "role": "coder", "model": model,
+            "attempt": attempt, "status": status, "ts": ts}
+
+
+def plan_coder_dispatch_ops(issue_number: int, attempt: int, run_id: str, model: str,
+                            comment_id: str | None, from_label: str = "ready",
+                            ts: str | None = None) -> list[dict]:
+    """Pure: claim a coder issue for dispatch (Phase 2D).
+
+    Label move first (`ready`/`backlog` → `in-progress`), then the **in-flight marker** —
+    the crash-safe claim written BEFORE the long blocking coder run. If the gate dies
+    mid-build, the next tick sees `in-progress` + a fresh `started` marker and waits out
+    STUCK_MIN before recovering. `attempt` is recorded so recovery can cap retries. There
+    is deliberately no post-run marker write: recovery is driven by marker-staleness + PR
+    presence (a real PR moves the issue to the review lane), per the roadmap.
+    """
+    ts = ts or _now_iso()
+    remove = [from_label] if from_label and from_label != "in-progress" else []
+    marker = _coder_marker(issue_number, attempt, run_id, model, "started", ts)
+    return [
+        {"op": "edit_labels", "issue": issue_number, "add": ["in-progress"], "remove": remove},
+        {"op": "upsert_marker", "issue": issue_number, "comment_id": comment_id,
+         "body": render_marker(marker)},
+    ]
+
+
+def plan_recovery_escalation_ops(issue_number: int, attempt: int, run_id: str,
+                                 comment_id: str | None, ts: str | None = None) -> list[dict]:
+    """Pure: retry cap reached — park the issue for a human (Phase 2D)."""
+    ts = ts or _now_iso()
+    marker = _coder_marker(issue_number, attempt, run_id, "", "escalated", ts)
+    return [
+        {"op": "edit_labels", "issue": issue_number, "add": ["needs-human"],
+         "remove": ["in-progress"]},
+        {"op": "comment", "issue": issue_number,
+         "body": (f"Gate: the coder did not produce a PR after {attempt} attempt(s) "
+                  f"(max reached). Parking for a human (`needs-human`).")},
+        {"op": "upsert_marker", "issue": issue_number, "comment_id": comment_id,
+         "body": render_marker(marker)},
+    ]
+
+
 class GitHubWriter:
     """Applies mutation ops via the `gh` CLI. Inject `runner` for testing."""
 

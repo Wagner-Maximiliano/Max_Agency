@@ -42,6 +42,8 @@ class IssueContext:
     cto_verdict_present: bool = False
     # a kickoff has already been created for this approved plan (marker present)
     kickoff_created: bool = False
+    # latest coder dispatch attempt recorded in the marker (0 = none yet); caps recovery
+    attempt: int = 0
     # issue title (used by the executor when creating a linked kickoff issue)
     title: str = ""
     # comment id of the existing per-issue marker, if any (for in-place edit)

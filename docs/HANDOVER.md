@@ -54,12 +54,21 @@ with no manual label-fixing and no babysitting.
   (coder→`role:coder`+`ready`, architect→`role:architect`, needs-human→`needs-human`) +
   rationale comment. Hard `--llm-timeout` on every LLM call; atomic + idempotent + fail-safe.
   New module `gate/harness.py`. Validated live on the throwaway repo.
+- **Phase 2D — coder dispatch + recovery** ✅ `--mode dispatch-enabled` also dispatches the
+  coder (`xiaomi/mimo-v2.5` via `wsl.exe → hermes`) for one `role:coder`+`ready` issue per
+  tick: claim (`ready → in-progress` + in-flight `started`/attempt marker) before the blocking
+  run, PR↔issue convention (`max-agency/issue-<N>/attempt-<k>`, `[AI-<N>]`, `Closes #<N>`),
+  time+PR-based recovery (stale marker + no PR → re-dispatch, attempt++ → `--max-attempts` →
+  `needs-human`). Hard `--coder-timeout`. **Safety fix:** the coder runs from a **neutral
+  cwd**, never the gate's repo (`run_llm(..., cwd=)`) — a `wsl.exe` child inherits the
+  launcher's cwd and clobbered our checkout (`git checkout`) once before the fix.
 - **Phase 1 — MDP cut** ✅ deleted `skills/mdp-*` + `docs/MDP.md`; stripped MDP refs from
   `agents/*.md`, `docs/AMA.md`, top-level docs, and hermes profile configs; folded the
   file-safety/verification-rollback rules into `CODING_STANDARDS.md` §13.
-- **93 gate unit tests passing.** Phases 2A/2B/2C validated live on a throwaway repo (test
+- **103 gate unit tests passing.** Phases 2A/2B/2C/2D validated live on a throwaway repo (test
   issues created, exercised, then closed). **Setup dependency surfaced in 2C:** the repo must
-  carry the full workflow label set — Phase 3 `setup.ps1` must create them.
+  carry the full workflow label set — Phase 3 `setup.ps1` must create them. **2D adds:** `gh`
+  authed *inside WSL* (coder opens the PR from WSL) + the neutral-cwd safeguard.
 
 Pattern to keep: **pure logic (planner/classifier) separated from a thin CLI layer**, so the
 decision logic is unit-testable without network. The thin `gh`/CLI layer is mocked in tests.
@@ -185,10 +194,15 @@ tick. Atomic (no label ⇒ no comment) + idempotent. New module `gate/harness.py
 (pure prompt/parse + thin timeout runner). Validated live. **Reuse for 2D/2E:**
 `harness.run_llm` (the hard-timeout runner) + `harness._runnable_argv` (Windows `.cmd` shim).
 
-**Phase 2D — coder harness.** Gate dispatches the coder (mimo via `wsl.exe`) for one issue,
-writes the in-flight dispatch marker, follows the PR↔issue convention
+**Phase 2D — coder harness.** ✅ **DONE.** Gate dispatches the coder (mimo via `wsl.exe →
+hermes`) for one `role:coder`+`ready` issue per tick, writes the in-flight dispatch marker
+*before* the blocking run, follows the PR↔issue convention
 (`max-agency/issue-<N>/attempt-<k>`, PR title `[AI-<N>]`, body `Closes #<N>`), and runs the
-recovery loop (stuck→reclaim→retry to `MAX_ATTEMPTS`→`needs-human`).
+recovery loop (stale marker + no PR → reclaim/re-dispatch, attempt++ to `--max-attempts` →
+`needs-human`). Hard `--coder-timeout`; coder runs from a **neutral cwd** (never the repo).
+**Reuse for 2E:** `harness.run_llm` now takes `cwd=` for tool-using (non-read-only) harnesses
+— the architect/CTO Claude harnesses that touch a checkout should pass a neutral/clone dir
+too. **Next: Phase 2E.**
 
 **Phase 2E — architect + CTO harnesses + plan approval.** Architect (Claude) turns a brief
 into `PLAN.md` at `/plans/issue-<N>/PLAN.md` and opens an approval issue; CTO (Claude)

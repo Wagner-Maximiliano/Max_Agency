@@ -41,14 +41,19 @@ login) · phase tag = earliest phase that needs it.
     is rejected on ChatGPT-account logins). Overridable via `--triage-model` /
     `$GATE_TRIAGE_MODEL`.
 - [ ] **WSL + `hermes`** — coder harness (OpenRouter `xiaomi/mimo-v2.5`). Invoked from
-      Windows as `wsl.exe -e bash -lc "hermes ..."`. **2D.** `[manual]`
-  - [ ] `OPENROUTER_API_KEY` set in `~/.hermes/.env` (WSL filesystem). **2D.** `[manual]`
+      Windows as `wsl.exe -e bash -lc "hermes ..."`. Verify: `wsl -e bash -lc "which hermes"`.
+      **2D.** `[manual]`
+  - [ ] `OPENROUTER_API_KEY` set in `~/.hermes/.env` (WSL filesystem). Verify:
+        `wsl -e bash -lc "grep -c OPENROUTER_API_KEY ~/.hermes/.env"`. **2D.** `[manual]`
   - [ ] Coder profile `model.default: xiaomi/mimo-v2.5` (repo-tracked in
         `hermes-config/profiles/coder/config.yaml`; live copy at
         `~/.hermes/profiles/coder/config.yaml`). **2D.**
+  - [ ] **`gh` authenticated *inside WSL*** — the coder reads the issue and opens the PR
+        via `gh` from WSL (separate from the Windows `gh` login). Verify:
+        `wsl -e bash -lc "gh auth status"`. **2D.** `[manual]`
   - ⚠ **Gotcha:** hermes does **not** auto-load `~/.hermes/.env`; any ad-hoc invocation
     must `set -a; source ~/.hermes/.env; set +a` first (production systemd units use
-    `EnvironmentFile=`).
+    `EnvironmentFile=`). The gate's coder command does this automatically.
 - [ ] **`claude` CLI** (Claude Opus) — architect + CTO harnesses. Verify: `claude --version`.
       **2E.** `[manual]`
 
@@ -99,10 +104,18 @@ gh label list --repo OWNER/REPO --json name --jq '[.labels[].name]'
 - **`codex` on Windows is a `.cmd` npm shim** that `subprocess` can't launch directly; the
   gate/bench runners handle this by invoking `node ...\codex.js` (see `gate/harness.py`
   `_runnable_argv`). No human action needed — noted so it isn't re-debugged.
+- **The coder runs from a neutral working directory, never the gate's repo.** `wsl.exe`
+  inherits the launching process's cwd (translated to `/mnt/c/...`), so a coder launched
+  from the Max Agency checkout would run `git`/`gh` (under `--yolo`) *inside it* and can
+  mutate the gate's own branch/worktree. The gate runs the coder from a throwaway temp dir
+  (`gate.py` `dispatch_coder`, mirroring the Phase 0 orchestrator's neutral cwd). No human
+  action needed — noted so the safeguard isn't removed.
 - **Codex model availability is account-specific** — verify `gpt-5.4-mini` works on the
   actual account (§2) rather than assuming.
 
 ---
 
-*Surfaced-by log (newest first): §3 labels + stale-installer mismatch — Phase 2C
-(2026-06-16). §2 codex/model — Phase 0/2C. §2 hermes `.env` gotcha — Phase 0.*
+*Surfaced-by log (newest first): §2 gh-in-WSL + §6 neutral-cwd safeguard — Phase 2D
+(2026-06-16, after a coder inherited the repo cwd and ran `git checkout` in it). §3 labels +
+stale-installer mismatch — Phase 2C (2026-06-16). §2 codex/model — Phase 0/2C. §2 hermes
+`.env` gotcha — Phase 0.*

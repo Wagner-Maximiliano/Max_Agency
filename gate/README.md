@@ -4,7 +4,7 @@ The gate is the single deterministic entry point that replaces the old polling d
 See the roadmap (`Simplification & Reliability Roadmap v3`) for the full design. This
 directory is being built **one phase at a time, beside the old system**.
 
-## Status: Phase 0 ✅ + Phase 2A ✅ + Phase 2B ✅ + Phase 2C ✅
+## Status: Phase 0 ✅ + Phase 2A ✅ + Phase 2B ✅ + Phase 2C ✅ + Phase 2D ✅
 
 **2A — dry-run (read-only):** reads scoped issues, classifies via the state-machine table,
 prints the intended action (unknown/conflicting → `unknown-state`, no action; one corrupt
@@ -29,6 +29,20 @@ is a logged no-op, retried next tick — it never freezes the gate. Triage is at
 ⇒ no comment) and idempotent (the applied label moves the issue out of scope-only). The other
 LLM actions (dispatch-coder / architect / cto / recover) remain deferred to 2D–2E.
 
+**2D — coder dispatch + recovery:** in `dispatch-enabled` mode the gate now also dispatches
+the **coder** (`xiaomi/mimo-v2.5` via `wsl.exe → hermes`) for one `role:coder`+`ready` issue
+per tick. It **claims** the issue first (move `ready → in-progress` + write the in-flight
+`<!-- max-agency-dispatch … status: started attempt: k -->` marker) **before** the blocking
+run, so a crash mid-build is recoverable. Only the integer issue number reaches the command —
+hermes reads the untrusted issue text itself via `gh` (least exposure). The coder follows the
+PR↔issue convention (branch `max-agency/issue-<N>/attempt-<k>`, PR title `[AI-<N>]`, body
+`Closes #<N>`). **Recovery** is time + PR based: an `in-progress` issue whose marker has gone
+stale (older than `--stuck-min`) with no open PR is re-dispatched (attempt incremented) up to
+`--max-attempts`, then parked `needs-human`. Every coder run is under a hard `--coder-timeout`
+(default 1800 s) and — critically — runs from a **neutral temp cwd**, never the gate's repo
+(a `wsl.exe` child inherits the launcher's cwd and would otherwise run `git` under `--yolo`
+inside our checkout). At most one coder is dispatched per tick (a build is long + synchronous).
+
 > **Setup dependency:** the gate's writes require the full workflow label set to **exist on
 > the repo** (scope label + `role:*` + `backlog`/`ready`/`in-progress`/`plan-ready`/`kickoff`/
 > `needs-human`). A missing label makes the atomic label-edit fail safely (logged, no comment,
@@ -43,8 +57,12 @@ LLM actions (dispatch-coder / architect / cto / recover) remain deferred to 2D�
 python3 gate/gate.py --repo owner/repo                          # dry-run (default)
 python3 gate/gate.py --repo owner/repo --audit-all-open         # also list ignored issues
 python3 gate/gate.py --repo owner/repo --mode deterministic-only  # execute non-LLM moves
-python3 gate/gate.py --repo owner/repo --mode dispatch-enabled    # + orchestrator triage (needs codex)
+python3 gate/gate.py --repo owner/repo --mode dispatch-enabled    # + triage (codex) + coder (wsl->hermes)
 ```
+
+`dispatch-enabled` runs the real LLM harnesses: orchestrator triage (needs `codex`) **and**
+coder dispatch/recovery (needs `wsl.exe → hermes`). When dispatching coders, set
+`--stale-min >= --coder-timeout/60` so the run lock isn't reclaimed during a long build.
 
 Printed output, one line per scoped issue:
 
@@ -58,10 +76,11 @@ write power.
 ## Layout
 
 - `classifier.py` — pure state-machine logic (no I/O), fully unit-tested.
-- `executor.py` — pure mutation **planner** (Decision → ops, incl. triage verdict → labels)
-  + thin `gh` **writer** (2B/2C).
-- `harness.py` — orchestrator triage: pure prompt/command/verdict-parse + a thin LLM runner
-  with the **mandatory hard subprocess timeout** (2C).
+- `executor.py` — pure mutation **planner** (Decision → ops, incl. triage verdict → labels
+  and coder dispatch/recovery ops) + thin `gh` **writer** (2B/2C/2D).
+- `harness.py` — LLM harnesses: pure prompt/command/verdict-parse for triage (2C) and the
+  coder command (2D) + a thin LLM runner with the **mandatory hard subprocess timeout** and
+  a neutral-`cwd` option for tool-using harnesses.
 - `gate.py` — runner: lock, `gh` reads, marker/approval parsing, classify, execute, JSONL log.
 - `bench/` — Phase 0 model benchmark harness (see below).
 - `tests/` — `pytest` suite (state table, worked examples, parsing, planner/writer, triage,

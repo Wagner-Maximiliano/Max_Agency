@@ -161,7 +161,16 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     is atomic (no label ⇒ no comment) and idempotent. **Setup dependency surfaced:** the repo
     must have the full workflow label set (Phase 3 `setup.ps1` creates them; a missing label
     fails safely).
-  - **2D** coder harness (markers + recovery).
+  - **2D** coder harness (markers + recovery). ✅ **DONE — built, 103 unit tests, validated
+    live.** `dispatch-enabled` dispatches the coder (`xiaomi/mimo-v2.5` via `wsl.exe →
+    hermes`) for one `role:coder`+`ready` issue per tick: claim (`ready → in-progress` +
+    in-flight `started`/attempt marker) **before** the blocking run, PR↔issue convention
+    (branch `max-agency/issue-<N>/attempt-<k>`, title `[AI-<N>]`, body `Closes #<N>`), and
+    time+PR-based recovery (stale marker, no PR → re-dispatch, attempt++ → `--max-attempts`
+    → `needs-human`). Hard `--coder-timeout` on every run. **Safety fix surfaced live:** the
+    coder MUST run from a **neutral cwd**, never the gate's repo — a `wsl.exe` child inherits
+    the launcher's cwd and ran `git checkout` *inside our checkout* once (clobbering an
+    uncommitted working tree); same neutral-cwd safeguard the Phase 0 orchestrator got.
   - **2E** architect/CTO harnesses + plan approval.
   - **2F** decommission old pollers; cut scope label to `AI`; move single scheduler to Windows.
 - **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1` that **implements
