@@ -59,28 +59,33 @@ decision logic is unit-testable without network. The thin `gh`/CLI layer is mock
 
 ## 4. Environment (this session runs ON the real Windows host — verify it every session)
 
-**The real host is `LAPTOP-GJG9H5TJ`, user `lobster`.** Claude Code's Bash/Edit/Read/Write
-tools, the Windows-MCP tools, and the user's own PowerShell all operate on the **same**
-Windows filesystem — proven by a bidirectional marker cross-test (2026-06-16). There is **no
-sandbox/overlay separation**: a file written by the Bash tool is immediately visible to the
-user's PowerShell, and vice-versa. *(An earlier session wrongly concluded "separate sandbox";
-the real cause was a not-yet-installed CLI + shell-PATH/WSL-vs-Windows confusion, not a split
-filesystem. Do not re-derive that wrong conclusion — verify instead, see the ritual below.)*
+**Claude Code's Bash/Edit/Read/Write tools, the Windows-MCP tools, and the user's own
+PowerShell all operate on the same Windows host/filesystem** — proven by a bidirectional
+marker cross-test (2026-06-16). There is **no sandbox/overlay separation**: a file written by
+the Bash tool is immediately visible to the user's PowerShell, and vice-versa. *(An earlier
+session wrongly concluded "separate sandbox"; the real cause was a not-yet-installed CLI +
+shell-PATH/WSL-vs-Windows confusion, not a split filesystem. Do not re-derive that wrong
+conclusion — verify instead, see the ritual below.)* The verification is about **consistency
+across the tools, not any one machine's name** — this generalizes to any host a human installs
+Max Agency on; nothing below is specific to the original developer's box.
 
 ### Two filesystems that ARE genuinely separate — keep them straight
-- **Windows** (`C:\Users\lobster\...`): runs `gh`, `codex`, `claude`, `python`, `git`. This is
-  where the repo lives and where the gate runs.
-- **WSL** (`/home/hermes/...`, distro user `hermes`): runs **only** `hermes` (the coder
-  harness), invoked from Windows as `wsl.exe -e bash -lc "..."`. Its `~/.hermes/` config and
-  `.env` live on the WSL filesystem, **not** on `C:\`. Do not try to run `codex`/`gh` *inside*
-  WSL (codex there is a broken snap) and do not look for hermes config under `C:\`.
+- **Windows** (the user's profile, e.g. `C:\Users\<you>\...`): runs `gh`, `codex`, `claude`,
+  `python`, `git`. This is where the repo lives and where the gate runs.
+- **WSL** (`/home/<distro-user>/...`): runs **only** `hermes` (the coder harness), invoked from
+  Windows as `wsl.exe -e bash -lc "..."`. Its `~/.hermes/` config and `.env` live on the WSL
+  filesystem, **not** on `C:\`. Do not run `codex`/`gh` *inside* WSL (codex there is a broken
+  snap) and do not look for hermes config under `C:\`.
 
 ### Session-start verification ritual (do this FIRST, every session — don't trust prior claims)
-Run via **Windows-MCP PowerShell** (unambiguously the real host, fresh env each call):
+Run via the **Bash tool** (default; same host) — use Windows-MCP PowerShell only if you need to
+reproduce the user's exact PowerShell PATH view. The goal is that hostname/HEAD agree across
+whatever tools you use, and that each CLI is present *on disk* — not that they match any
+specific machine name. Replace `<repo>` with the actual checkout path:
 ```powershell
-hostname; whoami                                   # expect LAPTOP-GJG9H5TJ / ...\lobster
-git -C C:\Users\lobster\Github_Projects\Max_Agency log --oneline -1   # confirm HEAD
-git -C C:\Users\lobster\Github_Projects\Max_Agency pull --ff-only      # sync first
+hostname; whoami                                   # any value — just confirm it's consistent
+git -C <repo> log --oneline -1   # confirm HEAD
+git -C <repo> pull --ff-only      # sync first
 codex --version; (npm ls -g @openai/codex) ; gh --version              # Windows CLIs present?
 wsl -e bash -lc "which hermes; grep -i default ~/.hermes/profiles/coder/config.yaml"  # WSL side
 ```
@@ -103,7 +108,8 @@ running the harnesses.
   installs and live WSL config do NOT live in git — re-verify them each session (ritual above)
   and ultimately automate them in Phase 3 `setup.ps1`.
 
-- Repo: `C:\Users\lobster\Github_Projects\Max_Agency` (Windows host).
+- Repo: the local checkout on a Windows host (the original dev's path was
+  `C:\Users\lobster\Github_Projects\Max_Agency`; yours will differ — nothing depends on it).
 - Branch: **`claude/epic-faraday-5cbhk1`** — keep developing here; commit + push each phase.
   `git pull` first (previous sessions pushed here).
 - CLIs (verify each session per the ritual — do not assume):
