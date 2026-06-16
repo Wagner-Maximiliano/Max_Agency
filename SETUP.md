@@ -54,8 +54,9 @@ login) · phase tag = earliest phase that needs it.
   - ⚠ **Gotcha:** hermes does **not** auto-load `~/.hermes/.env`; any ad-hoc invocation
     must `set -a; source ~/.hermes/.env; set +a` first (production systemd units use
     `EnvironmentFile=`). The gate's coder command does this automatically.
-- [ ] **`claude` CLI** (Claude Opus) — architect + CTO harnesses. Verify: `claude --version`.
-      **2E.** `[manual]`
+- [ ] **`claude` CLI** (Claude Opus) — architect + CTO harnesses, run headless + tool-less
+      (`claude -p --tools ""`). Must be authenticated. Verify: `claude --version`;
+      `echo hi | claude -p --tools "" "Reply OK"`. **2E.** `[manual]`
 
 ## 3. Repo state — labels  *(needed now — the gate's writes fail without them)*
 
@@ -68,6 +69,12 @@ comment, retried) — but it must exist for the gate to make progress. `[auto]`
 - [ ] **Role labels:** `role:architect` · `role:coder` · `role:cto`. **2A.**
 - [ ] **State labels:** `backlog` · `ready` · `in-progress` · `plan-ready` · `kickoff` ·
       `needs-human`. **2A.**
+
+> ⚠ **`role:cto` is easy to miss** — the throwaway test repo had every label *except*
+> `role:cto`, so the coder-PR → CTO routing failed live until it was created. The gate now
+> applies label *adds before removes* (separate `gh` calls) so a missing target label can't
+> half-strip an issue, but the label must still exist for the move to complete. `setup.ps1`
+> must create the **whole** set above.
 
 Verify the full set exists:
 ```sh
@@ -115,7 +122,8 @@ gh label list --repo OWNER/REPO --json name --jq '[.labels[].name]'
 
 ---
 
-*Surfaced-by log (newest first): §2 gh-in-WSL + §6 neutral-cwd safeguard — Phase 2D
+*Surfaced-by log (newest first): §3 `role:cto`-label miss + §2 `claude` headless/tool-less —
+Phase 2E (2026-06-16). §2 gh-in-WSL + §6 neutral-cwd safeguard — Phase 2D
 (2026-06-16, after a coder inherited the repo cwd and ran `git checkout` in it). §3 labels +
 stale-installer mismatch — Phase 2C (2026-06-16). §2 codex/model — Phase 0/2C. §2 hermes
 `.env` gotcha — Phase 0.*

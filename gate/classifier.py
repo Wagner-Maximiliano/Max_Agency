@@ -120,10 +120,12 @@ def classify(ctx: IssueContext) -> Decision:
                 return d("ready", "no-action", "active marker present")
             return d("ready", "would-dispatch-coder", "no active marker", llm="coder")
         if "in-progress" in labels:
+            # An open PR means the coder succeeded — route to review now, regardless of
+            # marker freshness (else a just-built PR waits out STUCK_MIN before review).
+            if ctx.linked_pr_open:
+                return d("in-progress", "would-route-cto", "coder PR open, route to review")
             if ctx.marker_active:
                 return d("in-progress", "no-action", "active marker not stale")
-            if ctx.linked_pr_open:
-                return d("in-progress", "no-action", "PR open, awaiting review routing")
             return d("in-progress", "would-recover", "no active marker and no PR")
 
     # 11. CTO review awaiting a verdict.

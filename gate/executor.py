@@ -33,6 +33,7 @@ DETERMINISTIC_ACTIONS = {
     "would-close",
     "would-reopen-architect",
     "would-create-kickoff",
+    "would-route-cto",
 }
 
 
@@ -60,6 +61,11 @@ def plan_actions(decision: Decision, ctx: IssueContext, run_id: str,
     if action == "would-close":
         return [{"op": "close", "issue": n, "reason": "completed",
                  "comment": "Closed by gate: linked PR merged."}]
+
+    if action == "would-route-cto":
+        # coder's PR is open → hand the issue to the CTO review lane (deterministic).
+        return [{"op": "edit_labels", "issue": n, "add": ["role:cto"],
+                 "remove": ["role:coder", "in-progress"]}]
 
     if action == "would-reopen-architect":
         marker = {"run_id": run_id, "issue": n, "status": "changes-routed", "ts": ts}
@@ -144,6 +150,80 @@ def plan_architect_ops(issue_number: int, plan_md: str, run_id: str,
     ]
 
 
+# ── Phase 2E: CTO verdict routing ─────────────────────────────────────────────
+def plan_cto_ops(verdict: str, human_review: bool | None, reason: str, issue_number: int,
+                 pr_number: int, run_id: str, comment_id: str | None,
+                 ci_green: bool = True, auto_merge: bool = True,
+                 ts: str | None = None) -> list[dict]:
+    """Pure: route a CTO verdict to mutation ops (Phase 2E). Comment first (the review is
+    recorded even if a later op fails), then the state change, then the marker.
+
+    - APPROVE_MERGE + HUMAN-REVIEW:NO + CI green + auto_merge → squash-merge (closes the
+      issue via `Closes #N`). Otherwise hold for a human (`needs-human`) — no blind merge.
+    - REQUEST_CHANGES → close the PR + bounce to the coder lane (`role:coder`+`ready`,
+      attempt++ next dispatch).
+    - ESCALATE_HUMAN → `needs-human`.
+    - REJECT_CLOSE → close the PR and the issue.
+    """
+    ts = ts or _now_iso()
+    r = f": {reason}" if reason else ""
+
+    def marker(status: str) -> dict:
+        return {"op": "upsert_marker", "issue": issue_number, "comment_id": comment_id,
+                "body": render_marker({"run_id": run_id, "issue": issue_number,
+                                       "role": "cto", "status": status, "ts": ts})}
+
+    def comment(body: str) -> dict:
+        return {"op": "comment", "issue": issue_number, "body": body}
+
+    if verdict == "APPROVE_MERGE":
+        blocked = bool(human_review) or not ci_green or not auto_merge
+        if blocked:
+            why = ("a human review was requested" if human_review else
+                   "CI is not green" if not ci_green else "auto-merge is disabled")
+            return [
+                comment(f"CTO verdict: **APPROVE_MERGE**, but holding for a human "
+                        f"({why}){r}"),
+                {"op": "edit_labels", "issue": issue_number, "add": ["needs-human"],
+                 "remove": ["role:cto"]},
+                marker("cto-approved-human"),
+            ]
+        return [
+            comment(f"CTO verdict: **APPROVE_MERGE** — squash-merging{r}"),
+            {"op": "merge_pr", "pr": pr_number, "method": "squash"},
+            marker("cto-merged"),
+        ]
+
+    if verdict == "REQUEST_CHANGES":
+        return [
+            comment(f"CTO verdict: **REQUEST_CHANGES**{r}"),
+            {"op": "close_pr", "pr": pr_number,
+             "comment": "Closed by gate: CTO requested changes; the coder will re-attempt."},
+            {"op": "edit_labels", "issue": issue_number, "add": ["role:coder", "ready"],
+             "remove": ["role:cto"]},
+            marker("cto-changes"),
+        ]
+
+    if verdict == "ESCALATE_HUMAN":
+        return [
+            comment(f"CTO verdict: **ESCALATE_HUMAN**{r}"),
+            {"op": "edit_labels", "issue": issue_number, "add": ["needs-human"],
+             "remove": ["role:cto"]},
+            marker("cto-escalated"),
+        ]
+
+    if verdict == "REJECT_CLOSE":
+        return [
+            comment(f"CTO verdict: **REJECT_CLOSE**{r}"),
+            {"op": "close_pr", "pr": pr_number, "comment": "Closed by gate: CTO rejected."},
+            {"op": "close", "issue": issue_number, "reason": "not planned",
+             "comment": "Closed by gate: CTO rejected the PR."},
+            marker("cto-rejected"),
+        ]
+
+    return []  # unrecognized verdict → no ops (caller logs + retries)
+
+
 # ── Phase 2D: coder dispatch + recovery ───────────────────────────────────────
 def _coder_marker(issue: int, attempt: int, run_id: str, model: str,
                   status: str, ts: str) -> dict:
@@ -207,12 +287,22 @@ class GitHubWriter:
         kind = op["op"]
         repo = ["--repo", self.repo]
         if kind == "edit_labels":
-            args = ["issue", "edit", str(op["issue"]), *repo]
-            for lab in op.get("add", []):
-                args += ["--add-label", lab]
-            for lab in op.get("remove", []):
-                args += ["--remove-label", lab]
-            self._run(args)
+            # Adds FIRST, in a separate call from removes: if a target label is missing on
+            # the repo the add fails *before* anything is removed, so the issue keeps its
+            # prior state (logged, retried) instead of being half-stripped. (`gh issue edit`
+            # applies a mixed add/remove call non-atomically — a failed add still removes.)
+            adds = op.get("add", [])
+            removes = op.get("remove", [])
+            if adds:
+                args = ["issue", "edit", str(op["issue"]), *repo]
+                for lab in adds:
+                    args += ["--add-label", lab]
+                self._run(args)
+            if removes:
+                args = ["issue", "edit", str(op["issue"]), *repo]
+                for lab in removes:
+                    args += ["--remove-label", lab]
+                self._run(args)
         elif kind == "close":
             self._run(["issue", "close", str(op["issue"]), *repo,
                        "--reason", op["reason"], "--comment", op["comment"]])
@@ -231,6 +321,14 @@ class GitHubWriter:
                 self._run(["issue", "comment", str(op["issue"]), *repo, "--body", op["body"]])
         elif kind == "upsert_file":
             self._upsert_file(op["path"], op["content"], op["message"], op.get("branch"))
+        elif kind == "merge_pr":
+            self._run(["pr", "merge", str(op["pr"]), *repo,
+                       f"--{op.get('method', 'squash')}", "--delete-branch"])
+        elif kind == "close_pr":
+            args = ["pr", "close", str(op["pr"]), *repo]
+            if op.get("comment"):
+                args += ["--comment", op["comment"]]
+            self._run(args)
         else:
             raise ValueError(f"unknown op: {kind}")
 

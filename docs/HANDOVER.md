@@ -62,13 +62,23 @@ with no manual label-fixing and no babysitting.
   `needs-human`). Hard `--coder-timeout`. **Safety fix:** the coder runs from a **neutral
   cwd**, never the gate's repo (`run_llm(..., cwd=)`) — a `wsl.exe` child inherits the
   launcher's cwd and clobbered our checkout (`git checkout`) once before the fix.
+- **Phase 2E — architect + CTO** ✅ Architect (Claude Opus, `claude -p --tools ""`) generates
+  a PLAN from the brief → `plans/issue-<N>/PLAN.md` + approval comment + `role:architect →
+  plan-ready`; approve→kickoff is the 2B path. An open coder PR routes `in-progress →
+  role:cto` (deterministic); CTO reviews the diff → first-line verdict the gate routes
+  (APPROVE_MERGE+`HUMAN-REVIEW:NO`+CI-green+`--auto-merge` → squash-merge, else hold
+  `needs-human`; REQUEST_CHANGES → close PR + bounce to coder; ESCALATE_HUMAN → `needs-human`;
+  REJECT_CLOSE → close PR + issue). Both pure text-gen, no tools, hard `--claude-timeout`,
+  neutral cwd. Fixes: GraphQL marker edits (REST PATCH 404s on the node id) + `edit_labels`
+  adds-before-removes (a missing label can't half-strip an issue).
 - **Phase 1 — MDP cut** ✅ deleted `skills/mdp-*` + `docs/MDP.md`; stripped MDP refs from
   `agents/*.md`, `docs/AMA.md`, top-level docs, and hermes profile configs; folded the
   file-safety/verification-rollback rules into `CODING_STANDARDS.md` §13.
-- **103 gate unit tests passing.** Phases 2A/2B/2C/2D validated live on a throwaway repo (test
-  issues created, exercised, then closed). **Setup dependency surfaced in 2C:** the repo must
-  carry the full workflow label set — Phase 3 `setup.ps1` must create them. **2D adds:** `gh`
-  authed *inside WSL* (coder opens the PR from WSL) + the neutral-cwd safeguard.
+- **129 gate unit tests passing.** Phases 2A–2E validated live on a throwaway repo (test
+  issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
+  must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
+  caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
+  WSL* (coder), the `claude` CLI authed (architect/CTO), and the neutral-cwd safeguard.
 
 Pattern to keep: **pure logic (planner/classifier) separated from a thin CLI layer**, so the
 decision logic is unit-testable without network. The thin `gh`/CLI layer is mocked in tests.
@@ -204,11 +214,13 @@ recovery loop (stale marker + no PR → reclaim/re-dispatch, attempt++ to `--max
 — the architect/CTO Claude harnesses that touch a checkout should pass a neutral/clone dir
 too. **Next: Phase 2E.**
 
-**Phase 2E — architect + CTO harnesses + plan approval.** Architect (Claude) turns a brief
-into `PLAN.md` at `/plans/issue-<N>/PLAN.md` and opens an approval issue; CTO (Claude)
-reviews PRs and emits a structured first-line verdict token
-(`APPROVE_MERGE`/`REQUEST_CHANGES`/`ESCALATE_HUMAN`/`REJECT_CLOSE`, + `HUMAN-REVIEW: YES|NO`).
-Honor the approval-comment rules (owner-only, latest comment, ignore bots/quotes/markers).
+**Phase 2E — architect + CTO harnesses + plan approval.** ✅ **DONE.** Architect (Claude
+Opus) turns a brief into `PLAN.md` at `/plans/issue-<N>/PLAN.md` + approval comment and flips
+`role:architect → plan-ready`; CTO (Claude Opus) reviews PRs and emits a first-line verdict
+token (`APPROVE_MERGE`/`REQUEST_CHANGES`/`ESCALATE_HUMAN`/`REJECT_CLOSE`, + `HUMAN-REVIEW:
+YES|NO`) that the gate routes deterministically (incl. squash-merge under
+`--auto-merge`/CI-green, else hold for a human). Approval-comment rules honored (owner-only,
+latest comment, ignore bots/quotes/markers — the 2B path). **Next: Phase 2F.**
 
 **Phase 2F — retire the old pollers.** Only after 2A–2E run stably on a live project: remove
 the Hermes coder timer/self-poll and the Claude Code 5-min routine; delete legacy

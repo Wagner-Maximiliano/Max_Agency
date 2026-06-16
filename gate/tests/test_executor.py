@@ -85,12 +85,33 @@ def _capture():
     return calls, (lambda args: calls.append(args) or "")
 
 
-def test_writer_edit_labels():
+def test_writer_edit_labels_adds_before_removes_in_separate_calls():
+    # adds and removes are separate gh calls (adds first) so a missing label can't
+    # half-strip the issue (a mixed gh call applies non-atomically).
     calls, runner = _capture()
     GitHubWriter("o/r", runner=runner).apply(
         {"op": "edit_labels", "issue": 7, "add": ["ready"], "remove": ["backlog"]})
-    assert calls[0] == ["issue", "edit", "7", "--repo", "o/r",
-                        "--add-label", "ready", "--remove-label", "backlog"]
+    assert calls[0] == ["issue", "edit", "7", "--repo", "o/r", "--add-label", "ready"]
+    assert calls[1] == ["issue", "edit", "7", "--repo", "o/r", "--remove-label", "backlog"]
+
+
+def test_writer_edit_labels_add_failure_skips_removes():
+    seen = []
+
+    def runner(args):
+        seen.append(args)
+        if "--add-label" in args:
+            raise RuntimeError("'role:cto' not found")
+        return ""
+
+    try:
+        GitHubWriter("o/r", runner=runner).apply(
+            {"op": "edit_labels", "issue": 7, "add": ["role:cto"],
+             "remove": ["role:coder", "in-progress"]})
+    except RuntimeError:
+        pass
+    # the failed add must run before (and prevent) any remove
+    assert all("--remove-label" not in a for a in seen)
 
 
 def test_writer_close():

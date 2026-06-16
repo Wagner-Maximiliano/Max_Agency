@@ -4,7 +4,7 @@ The gate is the single deterministic entry point that replaces the old polling d
 See the roadmap (`Simplification & Reliability Roadmap v3`) for the full design. This
 directory is being built **one phase at a time, beside the old system**.
 
-## Status: Phase 0 ✅ + Phase 2A ✅ + Phase 2B ✅ + Phase 2C ✅ + Phase 2D ✅
+## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅
 
 **2A — dry-run (read-only):** reads scoped issues, classifies via the state-machine table,
 prints the intended action (unknown/conflicting → `unknown-state`, no action; one corrupt
@@ -43,6 +43,22 @@ stale (older than `--stuck-min`) with no open PR is re-dispatched (attempt incre
 (a `wsl.exe` child inherits the launcher's cwd and would otherwise run `git` under `--yolo`
 inside our checkout). At most one coder is dispatched per tick (a build is long + synchronous).
 
+**2E — architect + CTO (Claude Opus via the `claude` CLI):** the last two LLM lanes.
+- **Architect** (`would-invoke-architect`): generates an implementation PLAN from the issue
+  brief (pure text-gen, `claude -p --tools ""`, brief on stdin, neutral cwd), writes it to
+  `plans/issue-<N>/PLAN.md`, posts it as an approval comment, and flips `role:architect →
+  plan-ready`. A `CHANGES:` revision feeds the owner's feedback back to the architect.
+  Approval routing (`APPROVE → kickoff` / `CHANGES → revise`) is the existing 2B path.
+- **CTO** (`would-invoke-cto`): an open coder PR routes `in-progress → role:cto`
+  (deterministic), then the CTO reviews the diff + issue/PR context and returns a first-line
+  verdict token. The gate routes it: **APPROVE_MERGE** + `HUMAN-REVIEW: NO` + CI green +
+  `--auto-merge` → squash-merge (closes the issue); otherwise hold `needs-human` (no blind
+  merge). **REQUEST_CHANGES** → close the PR + bounce to the coder lane (attempt++).
+  **ESCALATE_HUMAN** → `needs-human`. **REJECT_CLOSE** → close PR + issue.
+
+Every architect/CTO call is pure text generation (no tools), under the hard `--claude-timeout`,
+from a neutral cwd; a hung/failed/unparsed result is a logged no-op, retried next tick.
+
 > **Setup dependency:** the gate's writes require the full workflow label set to **exist on
 > the repo** (scope label + `role:*` + `backlog`/`ready`/`in-progress`/`plan-ready`/`kickoff`/
 > `needs-human`). A missing label makes the atomic label-edit fail safely (logged, no comment,
@@ -78,9 +94,9 @@ write power.
 - `classifier.py` — pure state-machine logic (no I/O), fully unit-tested.
 - `executor.py` — pure mutation **planner** (Decision → ops, incl. triage verdict → labels
   and coder dispatch/recovery ops) + thin `gh` **writer** (2B/2C/2D).
-- `harness.py` — LLM harnesses: pure prompt/command/verdict-parse for triage (2C) and the
-  coder command (2D) + a thin LLM runner with the **mandatory hard subprocess timeout** and
-  a neutral-`cwd` option for tool-using harnesses.
+- `harness.py` — LLM harnesses: pure prompt/command/verdict-parse for triage (2C), the coder
+  command (2D), and the architect + CTO commands/parsers (2E) + a thin LLM runner with the
+  **mandatory hard subprocess timeout** and a neutral-`cwd` option for tool-using harnesses.
 - `gate.py` — runner: lock, `gh` reads, marker/approval parsing, classify, execute, JSONL log.
 - `bench/` — Phase 0 model benchmark harness (see below).
 - `tests/` — `pytest` suite (state table, worked examples, parsing, planner/writer, triage,

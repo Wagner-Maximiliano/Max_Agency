@@ -95,10 +95,12 @@ def test_in_progress_recovers_when_stuck():
     assert d.intended_action == "would-recover"
 
 
-def test_in_progress_pr_open_awaits_routing():
-    d = classify(ctx(9, ["AI-GATE-TEST", "role:coder", "in-progress"],
-                      marker_active=False, linked_pr_open=True))
-    assert d.intended_action == "no-action"
+def test_in_progress_pr_open_routes_to_cto():
+    # an open PR routes to review immediately, even with a still-active marker
+    for active in (False, True):
+        d = classify(ctx(9, ["AI-GATE-TEST", "role:coder", "in-progress"],
+                          marker_active=active, linked_pr_open=True))
+        assert d.intended_action == "would-route-cto"
 
 
 def test_cto_invoked_when_pr_no_verdict():

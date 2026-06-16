@@ -74,6 +74,34 @@ def gh_json(args: list[str]) -> object:
     return json.loads(out.stdout or "null")
 
 
+def gh_text(args: list[str]) -> str:
+    """Run a read-only `gh` command and return raw stdout (e.g. `gh pr diff`)."""
+    try:
+        out = subprocess.run(["gh", *args], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=60)
+    except FileNotFoundError as e:
+        raise GhError("gh CLI not found on PATH") from e
+    except subprocess.TimeoutExpired as e:
+        raise GhError("gh call timed out") from e
+    if out.returncode != 0:
+        raise GhError((out.stderr or "").strip() or "gh call failed")
+    return out.stdout or ""
+
+
+def ci_is_green(rollup: list | None) -> bool:
+    """True if the PR's statusCheckRollup has no failing/pending checks (empty = no CI)."""
+    for c in rollup or []:
+        state = (c.get("state") or "").upper()
+        status = (c.get("status") or "").upper()
+        concl = (c.get("conclusion") or "").upper()
+        if state in ("FAILURE", "ERROR") or concl in (
+                "FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"):
+            return False
+        if state == "PENDING" or status in ("IN_PROGRESS", "QUEUED", "PENDING", "WAITING"):
+            return False
+    return True
+
+
 # ── Marker + approval parsing ────────────────────────────────────────────────
 def parse_marker(body: str) -> dict | None:
     """Parse the fields of a max-agency-dispatch HTML-comment marker, or None."""
@@ -281,8 +309,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="coder dispatch attempts before a stuck issue is parked needs-human")
     ap.add_argument("--architect-model", default=harness.DEFAULT_ARCHITECT_MODEL,
                     help="Claude model for the architect (plan generation); default opus")
+    ap.add_argument("--cto-model", default=harness.DEFAULT_CTO_MODEL,
+                    help="Claude model for the CTO (PR review); default opus")
     ap.add_argument("--claude-timeout", type=int, default=harness.DEFAULT_CLAUDE_TIMEOUT_S,
                     help="hard timeout (s) for a Claude architect/CTO call (default 300)")
+    ap.add_argument("--auto-merge", action=argparse.BooleanOptionalAction, default=True,
+                    help="on CTO APPROVE_MERGE + HUMAN-REVIEW:NO + CI green, squash-merge; "
+                         "--no-auto-merge holds every approved PR for a human instead")
     ap.add_argument("--runtime-dir", default="runtime")
     args = ap.parse_args(argv)
 
@@ -364,6 +397,9 @@ def main(argv: list[str] | None = None) -> int:
                     elif act == "would-invoke-architect":
                         mutations += dispatch_architect(writer, issue, ctx, decision,
                                                         run_id, args, log)
+                    elif act == "would-invoke-cto":
+                        mutations += dispatch_cto(writer, issue, ctx, decision,
+                                                  run_id, args, log, pr_map)
                     elif act == "would-recover" and ctx.attempt >= args.max_attempts:
                         # Cheap (label + comment), not a coder run — never budget-limited.
                         mutations += escalate_coder(writer, ctx, decision, run_id, args, log)
@@ -521,6 +557,56 @@ def dispatch_architect(writer, issue, ctx, decision, run_id, args, log) -> int:
     log("architect-plan", issue=n, chars=len(plan), revised=bool(feedback))
     ops = executor.plan_architect_ops(n, plan, run_id, ctx.marker_comment_id)
     return _apply_ops(writer, n, ops, log, critical_ops=("upsert_file", "edit_labels"))
+
+
+def dispatch_cto(writer, issue, ctx, decision, run_id, args, log, pr_map) -> int:
+    """Invoke the CTO (Claude) to review the linked PR; route the verdict deterministically.
+
+    Pure text-gen (no tools): the gate fetches the diff + PR meta and feeds them on stdin;
+    Claude returns a first-line verdict token; the gate applies the route (merge / hold /
+    bounce / escalate / reject). Fail-safe: a hung/failed/unparsed review is a logged no-op.
+    """
+    n = decision.number
+    pr = pr_map.get(n)
+    if not pr or pr.get("number") is None:
+        log("cto-no-pr", issue=n)
+        return 0
+    pr_number = pr["number"]
+    try:
+        diff = gh_text(["pr", "diff", str(pr_number), "--repo", args.repo])
+        meta = gh_json(["pr", "view", str(pr_number), "--repo", args.repo,
+                        "--json", "title,body,statusCheckRollup"]) or {}
+    except GhError as e:
+        log("cto-fetch-error", issue=n, detail=str(e)[:200])
+        return 0
+
+    stdin = harness.pr_to_cto_stdin(
+        issue.get("title", "") or "", issue.get("body", "") or "",
+        meta.get("title", "") or "", meta.get("body", "") or "", diff)
+    cmd = harness.build_cto_command(args.cto_model)
+    with tempfile.TemporaryDirectory(prefix="maxagency-cto-") as neutral_cwd:
+        result = harness.run_llm(cmd, args.claude_timeout, input_text=stdin, cwd=neutral_cwd)
+
+    if result["timed_out"]:
+        log("cto-timeout", issue=n, timeout_s=args.claude_timeout)
+        return 0
+    if result["returncode"] not in (0, None):
+        log("cto-failed", issue=n, returncode=result["returncode"],
+            detail=(result["stderr"] or "")[:300])
+        return 0
+    verdict, human_review, reason = harness.parse_cto_verdict(result["stdout"])
+    if verdict is None:
+        log("cto-unparsed", issue=n, stdout=(result["stdout"] or "")[:300])
+        return 0
+
+    ci_green = ci_is_green(meta.get("statusCheckRollup"))
+    log("cto-verdict", issue=n, verdict=verdict, human_review=human_review,
+        ci_green=ci_green, pr=pr_number, reason=reason[:200])
+    ops = executor.plan_cto_ops(verdict, human_review, reason, n, pr_number, run_id,
+                                ctx.marker_comment_id, ci_green=ci_green,
+                                auto_merge=args.auto_merge)
+    return _apply_ops(writer, n, ops, log,
+                      critical_ops=("edit_labels", "merge_pr", "close", "close_pr"))
 
 
 def escalate_coder(writer, ctx, decision, run_id, args, log) -> int:

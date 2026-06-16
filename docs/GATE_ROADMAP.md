@@ -171,7 +171,19 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     coder MUST run from a **neutral cwd**, never the gate's repo — a `wsl.exe` child inherits
     the launcher's cwd and ran `git checkout` *inside our checkout* once (clobbering an
     uncommitted working tree); same neutral-cwd safeguard the Phase 0 orchestrator got.
-  - **2E** architect/CTO harnesses + plan approval.
+  - **2E** architect/CTO harnesses + plan approval. ✅ **DONE — built, 129 unit tests,
+    validated live.** Architect (Claude Opus, `claude -p --tools ""`) generates a PLAN from
+    the brief → `plans/issue-<N>/PLAN.md` + approval comment + `role:architect → plan-ready`
+    (CHANGES feeds feedback back); approve→kickoff is the 2B path. An open coder PR routes
+    `in-progress → role:cto` (deterministic); the CTO reviews the diff and returns a
+    first-line verdict that the gate routes: APPROVE_MERGE+`HUMAN-REVIEW:NO`+CI-green
+    +`--auto-merge` → squash-merge (else hold `needs-human`); REQUEST_CHANGES → close PR +
+    bounce to coder; ESCALATE_HUMAN → `needs-human`; REJECT_CLOSE → close PR + issue. Both
+    harnesses: pure text-gen, no tools, hard `--claude-timeout`, neutral cwd, fail-safe.
+    **Two robustness fixes surfaced live:** (a) in-place marker edits use the GraphQL
+    `updateIssueComment` (node id) — REST PATCH 404s on the node id `gh` returns, which had
+    let a failed marker write risk a *duplicate kickoff*; (b) `edit_labels` does adds-first
+    then removes in separate calls, so a missing repo label can't half-strip an issue.
   - **2F** decommission old pollers; cut scope label to `AI`; move single scheduler to Windows.
 - **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1` that **implements
   the `SETUP.md` checklist** (created/maintained incrementally from Phase 2C on — setup
