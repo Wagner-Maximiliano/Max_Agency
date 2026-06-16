@@ -164,8 +164,13 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
   - **2D** coder harness (markers + recovery).
   - **2E** architect/CTO harnesses + plan approval.
   - **2F** decommission old pollers; cut scope label to `AI`; move single scheduler to Windows.
-- **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1`; humans open issues
-  in the GitHub UI (optional template auto-applies `AI`); trim `Human_Runbook.md`.
+- **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1` that **implements
+  the `SETUP.md` checklist** (created/maintained incrementally from Phase 2C on — setup
+  requirements are captured the moment each phase surfaces them, not reconstructed here).
+  This includes **reconciling/replacing the stale `scripts/setup-project.ps1`**, which
+  predates the gate (creates `assigned:*`/`phase:*`/`review`/`blocked` labels and omits the
+  scope label, `plan-ready`, and `needs-human`). Humans open issues in the GitHub UI (optional
+  template auto-applies `AI`); trim `Human_Runbook.md`.
 
 ---
 

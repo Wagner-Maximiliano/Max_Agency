@@ -34,8 +34,10 @@ with no manual label-fixing and no babysitting.
 1. `docs/GATE_ROADMAP.md` — full plan: state machine, cross-cutting requirements,
    implementation contract, phases, verification. **This is the source of truth.**
 2. `gate/README.md` — current gate status + how to run.
-3. `gate/classifier.py`, `gate/executor.py`, `gate/gate.py` — the implementation.
-4. `gate/tests/` — how things are tested (mirror this style).
+3. `SETUP.md` — the running setup-requirements checklist (what must be installed/present;
+   `setup.ps1` will automate it). Append to it whenever a phase surfaces a new prerequisite.
+4. `gate/classifier.py`, `gate/executor.py`, `gate/gate.py` — the implementation.
+5. `gate/tests/` — how things are tested (mirror this style).
 
 ---
 
@@ -127,6 +129,8 @@ running the harnesses.
   - `python` / `python3` — runs the gate.
 - Scope label: **`AI-GATE-TEST`** during phases 2A–2E. It flips to **`AI`** only at 2F when
   the old pollers are retired.
+- **Repo must carry the full gate label set** before the gate can act — see `SETUP.md` §3
+  (the old `scripts/setup-project.ps1` does *not* create the right set; reconciled at Phase 3).
 
 ### Run the gate
 ```sh
@@ -145,9 +149,14 @@ For every phase/sub-phase:
 2. **Unit-test** it (mock the CLI/LLM). Keep the suite green.
 3. **Dry-run / mock first**, then **validate live** on a throwaway repo (or `max_agency`)
    with `[GATE-TEST]`-titled issues. **Clean up: close the test issues afterward.**
-4. **Commit + push** to the branch. Update `gate/README.md` and the status line in
+4. **Capture setup requirements as you go.** If this phase surfaced any new install,
+   credential, repo-state, or config prerequisite (e.g. "the repo needs these labels", "this
+   CLI must be authed"), **append it to `SETUP.md` in the same change** — with the phase that
+   needs it, whether `setup.ps1` can automate it, and a verify command. Setup is captured
+   incrementally, never deferred wholesale to Phase 3. Nothing machine-specific.
+5. **Commit + push** to the branch. Update `gate/README.md` and the status line in
    `docs/GATE_ROADMAP.md`.
-5. Only then move to the next sub-phase. **Never delete the old system before the new path
+6. Only then move to the next sub-phase. **Never delete the old system before the new path
    passes live tests** (that happens at 2F).
 
 ---

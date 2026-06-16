@@ -29,11 +29,12 @@ is a logged no-op, retried next tick — it never freezes the gate. Triage is at
 ⇒ no comment) and idempotent (the applied label moves the issue out of scope-only). The other
 LLM actions (dispatch-coder / architect / cto / recover) remain deferred to 2D–2E.
 
-> **Setup dependency:** the gate's writes require the workflow labels to **exist on the repo**
-> (`role:architect` · `role:coder` · `role:cto` · `backlog` · `ready` · `in-progress` ·
-> `plan-ready` · `kickoff` · `needs-human`, plus the scope label). A missing label makes the
-> atomic label-edit fail safely (logged, no comment, retried) — Phase 3 `setup.ps1` will
-> create the full set so this can't happen in a real install.
+> **Setup dependency:** the gate's writes require the full workflow label set to **exist on
+> the repo** (scope label + `role:*` + `backlog`/`ready`/`in-progress`/`plan-ready`/`kickoff`/
+> `needs-human`). A missing label makes the atomic label-edit fail safely (logged, no comment,
+> retried). The authoritative, maintained list is **`SETUP.md` §3** (the root setup-requirements
+> checklist that Phase 3 `setup.ps1` will automate). The old `scripts/setup-project.ps1` does
+> **not** create the correct set — see `SETUP.md`.
 
 ## Run it
 
