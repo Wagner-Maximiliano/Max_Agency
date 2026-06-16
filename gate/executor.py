@@ -18,6 +18,7 @@ NO ops here — it is logged as deferred and left for the dispatch phases (2C–
 
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 from datetime import datetime, timezone
@@ -116,6 +117,33 @@ def plan_triage_ops(issue_number: int, label: str, reason: str) -> list[dict]:
     return ops
 
 
+# ── Phase 2E: architect (plan generation) ─────────────────────────────────────
+def plan_architect_ops(issue_number: int, plan_md: str, run_id: str,
+                       comment_id: str | None, ts: str | None = None) -> list[dict]:
+    """Pure: persist an architect-generated plan and move the issue to plan-ready (Phase 2E).
+
+    Order: write PLAN.md → post the plan comment → flip the label (the idempotency guard:
+    once `plan-ready` lands the issue won't re-invoke the architect) → marker. A retry
+    after a mid-run crash regenerates + re-comments (at most one duplicate comment), then
+    flips the label cleanly. Approval routing (APPROVE/CHANGES) is the existing 2B path.
+    """
+    ts = ts or _now_iso()
+    path = f"plans/issue-{issue_number}/PLAN.md"
+    marker = {"run_id": run_id, "issue": issue_number, "role": "architect",
+              "status": "plan-generated", "ts": ts}
+    comment = (f"Gate: the architect produced a plan at `{path}`. Reply `APPROVE` to kick "
+               f"off the build, or `CHANGES: <feedback>` to revise.\n\n---\n\n{plan_md}")
+    return [
+        {"op": "upsert_file", "path": path, "content": plan_md,
+         "message": f"plan(issue-{issue_number}): architect-generated PLAN"},
+        {"op": "comment", "issue": issue_number, "body": comment},
+        {"op": "edit_labels", "issue": issue_number, "add": ["plan-ready"],
+         "remove": ["role:architect"]},
+        {"op": "upsert_marker", "issue": issue_number, "comment_id": comment_id,
+         "body": render_marker(marker)},
+    ]
+
+
 # ── Phase 2D: coder dispatch + recovery ───────────────────────────────────────
 def _coder_marker(issue: int, attempt: int, run_id: str, model: str,
                   status: str, ts: str) -> dict:
@@ -198,9 +226,41 @@ class GitHubWriter:
         elif kind == "upsert_marker":
             cid = op.get("comment_id")
             if cid:  # edit the existing per-issue marker in place
-                self._run(["api", f"repos/{self.repo}/issues/comments/{cid}",
-                           "-X", "PATCH", "-f", f"body={op['body']}"])
+                self._update_comment(cid, op["body"])
             else:
                 self._run(["issue", "comment", str(op["issue"]), *repo, "--body", op["body"]])
+        elif kind == "upsert_file":
+            self._upsert_file(op["path"], op["content"], op["message"], op.get("branch"))
         else:
             raise ValueError(f"unknown op: {kind}")
+
+    def _update_comment(self, comment_id: str, body: str) -> None:
+        """Edit an issue comment in place. `gh ... --json comments` yields a GraphQL *node*
+        id (e.g. `IC_kwDO…`), which the REST `issues/comments/{id}` PATCH 404s on — it needs
+        the numeric db id. So update via GraphQL (node id) unless the id is purely numeric."""
+        if str(comment_id).isdigit():  # a REST numeric id (defensive; reads give node ids)
+            self._run(["api", f"repos/{self.repo}/issues/comments/{comment_id}",
+                       "-X", "PATCH", "-f", f"body={body}"])
+            return
+        self._run([
+            "api", "graphql",
+            "-f", "query=mutation($id:ID!,$body:String!){updateIssueComment("
+                  "input:{id:$id,body:$body}){clientMutationId}}",
+            "-f", f"id={comment_id}", "-f", f"body={body}",
+        ])
+
+    def _upsert_file(self, path: str, content: str, message: str, branch: str | None) -> None:
+        """Create-or-update a repo file via the contents API (needs the current sha to update)."""
+        api = f"repos/{self.repo}/contents/{path}"
+        sha = None
+        try:  # absent file => GET fails => create (no sha)
+            sha = (self._run(["api", api, "--jq", ".sha"]) or "").strip() or None
+        except Exception:
+            sha = None
+        b64 = base64.b64encode(content.encode("utf-8")).decode("ascii")
+        args = ["api", api, "-X", "PUT", "-f", f"message={message}", "-f", f"content={b64}"]
+        if sha:
+            args += ["-f", f"sha={sha}"]
+        if branch:
+            args += ["-f", f"branch={branch}"]
+        self._run(args)

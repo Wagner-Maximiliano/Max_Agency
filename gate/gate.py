@@ -140,6 +140,20 @@ def parse_approval(comments: list[dict]) -> str | None:
     return result
 
 
+def latest_changes_feedback(comments: list[dict]) -> str:
+    """The text of the latest owner `CHANGES:` comment (fed to the architect on a revision)."""
+    feedback = ""
+    for c in comments:
+        body = c.get("body", "") or ""
+        if MARKER_TOKEN in body:
+            continue
+        if (c.get("authorAssociation") or "").upper() not in APPROVAL_AUTHORS:
+            continue
+        if any(line.strip().lower().startswith("changes:") for line in body.splitlines()):
+            feedback = body.strip()
+    return feedback
+
+
 # ── Context assembly ─────────────────────────────────────────────────────────
 def build_context(issue: dict, pr_map: dict, closed_numbers: set[int], stuck_min: int) -> IssueContext:
     labels = {l["name"] for l in issue.get("labels", [])}
@@ -265,6 +279,10 @@ def main(argv: list[str] | None = None) -> int:
                          "reclaimed mid-build")
     ap.add_argument("--max-attempts", type=int, default=3,
                     help="coder dispatch attempts before a stuck issue is parked needs-human")
+    ap.add_argument("--architect-model", default=harness.DEFAULT_ARCHITECT_MODEL,
+                    help="Claude model for the architect (plan generation); default opus")
+    ap.add_argument("--claude-timeout", type=int, default=harness.DEFAULT_CLAUDE_TIMEOUT_S,
+                    help="hard timeout (s) for a Claude architect/CTO call (default 300)")
     ap.add_argument("--runtime-dir", default="runtime")
     args = ap.parse_args(argv)
 
@@ -343,6 +361,9 @@ def main(argv: list[str] | None = None) -> int:
                     act = decision.intended_action
                     if act == "would-triage":
                         mutations += dispatch_triage(writer, issue, decision, args, log)
+                    elif act == "would-invoke-architect":
+                        mutations += dispatch_architect(writer, issue, ctx, decision,
+                                                        run_id, args, log)
                     elif act == "would-recover" and ctx.attempt >= args.max_attempts:
                         # Cheap (label + comment), not a coder run — never budget-limited.
                         mutations += escalate_coder(writer, ctx, decision, run_id, args, log)
@@ -410,9 +431,12 @@ def dispatch_triage(writer, issue: dict, decision, args, log) -> int:
     return mutations
 
 
-def _apply_ops(writer, n: int, ops: list[dict], log) -> int:
-    """Apply mutation ops fail-safe; abort if the state-changing edit_labels fails (so a
-    follow-on comment/marker can't spam every tick). Returns the count applied."""
+def _apply_ops(writer, n: int, ops: list[dict], log,
+               critical_ops: tuple[str, ...] = ("edit_labels",)) -> int:
+    """Apply mutation ops fail-safe; abort if a *critical* op fails (so a follow-on
+    comment/marker can't spam every tick, and we don't advance state on a failed write).
+    Returns the count applied. `edit_labels` is critical by default; the architect also
+    treats `upsert_file` as critical (no plan persisted ⇒ don't flip to plan-ready)."""
     mutations = 0
     for op in ops:
         try:
@@ -421,8 +445,8 @@ def _apply_ops(writer, n: int, ops: list[dict], log) -> int:
             log("mutation", issue=n, op=op["op"])
         except Exception as e:  # one bad write must not halt the board
             log("mutation-error", issue=n, op=op["op"], detail=repr(e))
-            if op["op"] == "edit_labels":
-                break  # claim/label didn't land; don't post the trailing comment/marker
+            if op["op"] in critical_ops:
+                break  # state-changing write didn't land; stop before trailing ops
     return mutations
 
 
@@ -464,6 +488,39 @@ def dispatch_coder(writer, ctx, decision, run_id, args, log, from_label) -> int:
     else:
         log("coder-done", issue=n, attempt=attempt, returncode=result["returncode"])
     return mutations
+
+
+def dispatch_architect(writer, issue, ctx, decision, run_id, args, log) -> int:
+    """Invoke the architect (Claude) to produce a plan; persist it + move to plan-ready.
+
+    Pure text-gen (no tools), brief on stdin, run from a neutral cwd. Fail-safe: a
+    hung/failed/unusable generation is a logged no-op, retried next tick — nothing is
+    written to the repo and the issue stays role:architect.
+    """
+    n = decision.number
+    comments = issue.get("comments", []) or []
+    feedback = latest_changes_feedback(comments)  # non-empty on a CHANGES revision
+    cmd = harness.build_architect_command(args.architect_model)
+    stdin = harness.issue_to_architect_stdin(
+        issue.get("title", "") or "", issue.get("body", "") or "", feedback)
+    with tempfile.TemporaryDirectory(prefix="maxagency-arch-") as neutral_cwd:
+        result = harness.run_llm(cmd, args.claude_timeout, input_text=stdin, cwd=neutral_cwd)
+
+    if result["timed_out"]:
+        log("architect-timeout", issue=n, timeout_s=args.claude_timeout)
+        return 0
+    if result["returncode"] not in (0, None):
+        log("architect-failed", issue=n, returncode=result["returncode"],
+            detail=(result["stderr"] or "")[:300])
+        return 0
+    plan = result["stdout"] or ""
+    if not harness.is_plan_usable(plan):
+        log("architect-unusable", issue=n, stdout=plan[:300])
+        return 0
+
+    log("architect-plan", issue=n, chars=len(plan), revised=bool(feedback))
+    ops = executor.plan_architect_ops(n, plan, run_id, ctx.marker_comment_id)
+    return _apply_ops(writer, n, ops, log, critical_ops=("upsert_file", "edit_labels"))
 
 
 def escalate_coder(writer, ctx, decision, run_id, args, log) -> int:

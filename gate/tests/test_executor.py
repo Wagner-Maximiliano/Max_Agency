@@ -109,11 +109,22 @@ def test_writer_create_issue():
                         "--label", "AI-GATE-TEST", "--label", "kickoff"]
 
 
-def test_writer_upsert_marker_edits_in_place_when_id_known():
+def test_writer_upsert_marker_edits_node_id_via_graphql():
+    # `gh ... --json comments` yields a GraphQL node id (IC_…); REST PATCH 404s on it,
+    # so an in-place edit must go through the GraphQL updateIssueComment mutation.
     calls, runner = _capture()
     GitHubWriter("o/r", runner=runner).apply(
-        {"op": "upsert_marker", "issue": 11, "comment_id": "c9", "body": "M"})
-    assert calls[0] == ["api", "repos/o/r/issues/comments/c9", "-X", "PATCH", "-f", "body=M"]
+        {"op": "upsert_marker", "issue": 11, "comment_id": "IC_kwDOabc", "body": "M"})
+    assert calls[0][:2] == ["api", "graphql"]
+    assert "updateIssueComment" in calls[0][3]
+    assert "id=IC_kwDOabc" in calls[0] and "body=M" in calls[0]
+
+
+def test_writer_upsert_marker_edits_numeric_id_via_rest():
+    calls, runner = _capture()
+    GitHubWriter("o/r", runner=runner).apply(
+        {"op": "upsert_marker", "issue": 11, "comment_id": "12345", "body": "M"})
+    assert calls[0] == ["api", "repos/o/r/issues/comments/12345", "-X", "PATCH", "-f", "body=M"]
 
 
 def test_writer_upsert_marker_creates_when_no_id():
