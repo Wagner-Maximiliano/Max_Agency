@@ -46,11 +46,18 @@ with no manual label-fixing and no babysitting.
 - **Phase 2B — deterministic moves** ✅ `--mode deterministic-only` executes non-LLM actions:
   `backlog→ready` promotion, close-on-merged-PR, approval routing (`APPROVE`→create linked
   kickoff + idempotency marker; `CHANGES:`→back to `role:architect`). No LLM called.
+- **Phase 2C — triage LLM** ✅ `--mode dispatch-enabled` invokes the orchestrator
+  (`gpt-5.4-mini` via `codex`, **read-only** classify, issue text on stdin) to triage
+  scope-only issues; the gate applies the verdict label deterministically
+  (coder→`role:coder`+`ready`, architect→`role:architect`, needs-human→`needs-human`) +
+  rationale comment. Hard `--llm-timeout` on every LLM call; atomic + idempotent + fail-safe.
+  New module `gate/harness.py`. Validated live on the throwaway repo.
 - **Phase 1 — MDP cut** ✅ deleted `skills/mdp-*` + `docs/MDP.md`; stripped MDP refs from
   `agents/*.md`, `docs/AMA.md`, top-level docs, and hermes profile configs; folded the
   file-safety/verification-rollback rules into `CODING_STANDARDS.md` §13.
-- **47 unit tests passing.** Both gate phases validated live on the `max_agency` repo (test
-  issues created, exercised, then closed).
+- **93 gate unit tests passing.** Phases 2A/2B/2C validated live on a throwaway repo (test
+  issues created, exercised, then closed). **Setup dependency surfaced in 2C:** the repo must
+  carry the full workflow label set — Phase 3 `setup.ps1` must create them.
 
 Pattern to keep: **pure logic (planner/classifier) separated from a thin CLI layer**, so the
 decision logic is unit-testable without network. The thin `gh`/CLI layer is mocked in tests.
@@ -157,12 +164,17 @@ resolver (`node ...\codex.js`, no `cmd.exe`) and a neutral working dir for the
 orchestrator (codex under `danger-full-access` must not run inside the repo — it could
 read the answer key / unrelated files; neutral cwd also mirrors production triage).
 **Phase 0 is closed** — both models pass. (Duplicate flow-diagram HTML cleanup
-intentionally deferred; cosmetic, not a gate dependency.) **Next: Phase 2C.**
+intentionally deferred; cosmetic, not a gate dependency.) **Next: Phase 2D.**
 
-**Phase 2C — triage LLM (first real LLM call).** Gate invokes the orchestrator (gpt-5.4-mini)
-for scope-only issues to classify + label, or `needs-human`. **Add a hard subprocess timeout
-here — mandatory for every LLM/CLI call from now on** (a hung `claude`/`codex`/`wsl→hermes`
-must never freeze the gate). Add a `dispatch-enabled` mode.
+**Phase 2C — triage LLM (first real LLM call).** ✅ **DONE.** `--mode dispatch-enabled`
+invokes the orchestrator (`gpt-5.4-mini` via `codex`, **read-only** classify, issue text on
+**stdin** not argv) for scope-only issues; the gate applies the verdict label itself
+(least privilege) — coder→`role:coder`+`ready`, architect→`role:architect`,
+needs-human→`needs-human` — plus a rationale comment. Hard `--llm-timeout` (default 120 s) on
+every LLM/CLI call (mandatory from here on); hung/failed/unparsed = logged no-op, retried next
+tick. Atomic (no label ⇒ no comment) + idempotent. New module `gate/harness.py`
+(pure prompt/parse + thin timeout runner). Validated live. **Reuse for 2D/2E:**
+`harness.run_llm` (the hard-timeout runner) + `harness._runnable_argv` (Windows `.cmd` shim).
 
 **Phase 2D — coder harness.** Gate dispatches the coder (mimo via `wsl.exe`) for one issue,
 writes the in-flight dispatch marker, follows the PR↔issue convention

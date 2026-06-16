@@ -4,7 +4,7 @@ The gate is the single deterministic entry point that replaces the old polling d
 See the roadmap (`Simplification & Reliability Roadmap v3`) for the full design. This
 directory is being built **one phase at a time, beside the old system**.
 
-## Status: Phase 0 ✅ + Phase 2A ✅ + Phase 2B ✅
+## Status: Phase 0 ✅ + Phase 2A ✅ + Phase 2B ✅ + Phase 2C ✅
 
 **2A — dry-run (read-only):** reads scoped issues, classifies via the state-machine table,
 prints the intended action (unknown/conflicting → `unknown-state`, no action; one corrupt
@@ -15,7 +15,25 @@ issue never halts the board), logs to `runtime/logs/gate/<run_id>.jsonl`, uses
 `backlog → ready` promotion, closing issues whose linked PR merged, and approval routing
 (`plan-ready` + owner `APPROVE` → create a linked kickoff issue; `+ CHANGES:` → back to
 `role:architect`). Idempotency via a single per-issue marker comment. **No LLM is ever
-called.** Every LLM action (triage / dispatch / architect / cto / recover) is deferred.
+called.**
+
+**2C — dispatch-enabled (first real LLM call):** additionally invokes the **orchestrator**
+(`gpt-5.4-mini` via `codex`) to **triage** scope-only issues. The LLM only *classifies*
+(read-only sandbox, no tools; the issue text is fed on **stdin**, never in argv), returning
+a first-line verdict token (`ROLE_CODER`/`ROLE_ARCHITECT`/`NEEDS_HUMAN`) + a one-line reason.
+The **gate** then applies the label itself via the deterministic executor (least privilege):
+coder → `role:coder`+`ready` (coherent lane entry), architect → `role:architect`,
+needs-human → `needs-human`, plus a rationale comment. Every LLM/CLI call runs under a
+**hard subprocess timeout** (`--llm-timeout`, default 120 s); a hung/failed/unparsed triage
+is a logged no-op, retried next tick — it never freezes the gate. Triage is atomic (no label
+⇒ no comment) and idempotent (the applied label moves the issue out of scope-only). The other
+LLM actions (dispatch-coder / architect / cto / recover) remain deferred to 2D–2E.
+
+> **Setup dependency:** the gate's writes require the workflow labels to **exist on the repo**
+> (`role:architect` · `role:coder` · `role:cto` · `backlog` · `ready` · `in-progress` ·
+> `plan-ready` · `kickoff` · `needs-human`, plus the scope label). A missing label makes the
+> atomic label-edit fail safely (logged, no comment, retried) — Phase 3 `setup.ps1` will
+> create the full set so this can't happen in a real install.
 
 ## Run it
 
@@ -24,6 +42,7 @@ called.** Every LLM action (triage / dispatch / architect / cto / recover) is de
 python3 gate/gate.py --repo owner/repo                          # dry-run (default)
 python3 gate/gate.py --repo owner/repo --audit-all-open         # also list ignored issues
 python3 gate/gate.py --repo owner/repo --mode deterministic-only  # execute non-LLM moves
+python3 gate/gate.py --repo owner/repo --mode dispatch-enabled    # + orchestrator triage (needs codex)
 ```
 
 Printed output, one line per scoped issue:
@@ -38,10 +57,14 @@ write power.
 ## Layout
 
 - `classifier.py` — pure state-machine logic (no I/O), fully unit-tested.
-- `executor.py` — pure mutation **planner** (Decision → ops) + thin `gh` **writer** (2B).
+- `executor.py` — pure mutation **planner** (Decision → ops, incl. triage verdict → labels)
+  + thin `gh` **writer** (2B/2C).
+- `harness.py` — orchestrator triage: pure prompt/command/verdict-parse + a thin LLM runner
+  with the **mandatory hard subprocess timeout** (2C).
 - `gate.py` — runner: lock, `gh` reads, marker/approval parsing, classify, execute, JSONL log.
 - `bench/` — Phase 0 model benchmark harness (see below).
-- `tests/` — `pytest` suite (state table, worked examples, parsing, planner/writer, smoke tests).
+- `tests/` — `pytest` suite (state table, worked examples, parsing, planner/writer, triage,
+  smoke tests).
 
 ```sh
 python3 -m pytest gate -q

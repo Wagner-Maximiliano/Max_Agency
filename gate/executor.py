@@ -88,6 +88,34 @@ def plan_actions(decision: Decision, ctx: IssueContext, run_id: str,
     return []  # unreachable, but fail safe
 
 
+# A triage verdict label → the full label set that lands the issue in a *coherent* next
+# state (else a lone role:coder falls through the classifier to unknown-state). A directly
+# triaged coder task has no plan dependencies, so it enters the coder lane at `ready`
+# (→ would-dispatch-coder in 2D). Architect/needs-human need no companion state label.
+TRIAGE_ENTRY_LABELS = {
+    "role:coder": ["role:coder", "ready"],
+    "role:architect": ["role:architect"],
+    "needs-human": ["needs-human"],
+}
+
+
+def plan_triage_ops(issue_number: int, label: str, reason: str) -> list[dict]:
+    """Pure: turn an orchestrator triage verdict into mutation ops (Phase 2C).
+
+    Labels first (the state-changing, idempotency-critical op): once they land the issue
+    is no longer scope-only, so it won't re-triage even if the rationale comment fails. The
+    scope label is intentionally left in place (it's the human's opt-in/kill-switch).
+    """
+    add = TRIAGE_ENTRY_LABELS.get(label, [label])
+    ops: list[dict] = [
+        {"op": "edit_labels", "issue": issue_number, "add": add, "remove": []},
+    ]
+    if reason:
+        ops.append({"op": "comment", "issue": issue_number,
+                    "body": f"Gate triaged as `{label}`: {reason}"})
+    return ops
+
+
 class GitHubWriter:
     """Applies mutation ops via the `gh` CLI. Inject `runner` for testing."""
 

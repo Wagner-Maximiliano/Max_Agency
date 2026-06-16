@@ -151,7 +151,16 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
   - **2B** deterministic moves only (promotion, merged-close, approval routing) + idempotency
     markers; no LLM. ✅ **DONE — built, 47 unit tests total, validated live (promote +
     create-kickoff + idempotency on real issues).**
-  - **2C** triage LLM only (+ hard subprocess timeout, mandatory from here on).
+  - **2C** triage LLM only (+ hard subprocess timeout, mandatory from here on). ✅ **DONE —
+    built, 93 unit tests, validated live.** `dispatch-enabled` mode invokes the orchestrator
+    (`gpt-5.4-mini` via `codex`, **read-only** classify, issue text on stdin not argv) for
+    scope-only issues; it returns a first-line verdict token and the **gate** applies the
+    label deterministically (coder→`role:coder`+`ready`, architect→`role:architect`,
+    needs-human→`needs-human`) + a rationale comment. Hard `--llm-timeout` (default 120 s) on
+    every LLM/CLI call; hung/failed/unparsed triage = logged no-op, retried next tick. Triage
+    is atomic (no label ⇒ no comment) and idempotent. **Setup dependency surfaced:** the repo
+    must have the full workflow label set (Phase 3 `setup.ps1` creates them; a missing label
+    fails safely).
   - **2D** coder harness (markers + recovery).
   - **2E** architect/CTO harnesses + plan approval.
   - **2F** decommission old pollers; cut scope label to `AI`; move single scheduler to Windows.

@@ -46,6 +46,30 @@ def test_llm_actions_produce_no_ops():
         assert plan_actions(dec(1, action), IssueContext(1), RUN, SCOPE) == []
 
 
+# ── Phase 2C: triage verdict → ops (label first, then rationale comment) ───────
+def test_plan_triage_ops_coder_enters_ready_then_comment():
+    from executor import plan_triage_ops
+    ops = plan_triage_ops(7, "role:coder", "small single-file fix")
+    # coder enters the lane at `ready` (coherent next state, not lone role:coder)
+    assert ops[0] == {"op": "edit_labels", "issue": 7,
+                      "add": ["role:coder", "ready"], "remove": []}
+    assert ops[1]["op"] == "comment"
+    assert "role:coder" in ops[1]["body"] and "small single-file fix" in ops[1]["body"]
+
+
+def test_plan_triage_ops_architect_single_label():
+    from executor import plan_triage_ops
+    ops = plan_triage_ops(8, "role:architect", "needs a plan")
+    assert ops[0]["add"] == ["role:architect"]
+
+
+def test_plan_triage_ops_no_comment_when_reason_blank():
+    from executor import plan_triage_ops
+    ops = plan_triage_ops(7, "needs-human", "")
+    assert len(ops) == 1 and ops[0]["op"] == "edit_labels"
+    assert ops[0]["add"] == ["needs-human"]
+
+
 # ── idempotency: once a kickoff marker exists, classifier stops re-creating ───
 def test_kickoff_idempotent_via_marker():
     base = dict(labels={SCOPE, "plan-ready"}, approval="approve")

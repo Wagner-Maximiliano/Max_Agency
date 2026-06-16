@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""Max Agency gate — Phase 2A (dry-run, read-only).
+"""Max Agency gate — runner (Phases 2A dry-run · 2B deterministic · 2C triage).
 
-The six things, nothing more:
+The core loop:
   1. Read open issues with the scope label (default AI-GATE-TEST)
   2. Classify each using the state-machine table (classifier.py)
   3. Print the intended action (unknown/conflicting -> "unknown-state", no action)
   4. Write a structured log to runtime/logs/gate/<run_id>.jsonl
   5. Use gate.lock so runs cannot overlap
-  6. Change nothing
 
-Modes: only `dry-run` is implemented in 2A. `--audit-all-open` additionally reports which
-open issues would be ignored (no scope label) — audit only, never acted on.
+Modes:
+  dry-run            print only; change nothing (2A). `--audit-all-open` also reports
+                     open issues that would be ignored (no scope label).
+  deterministic-only also execute non-LLM moves: promote/close/approval routing (2B).
+  dispatch-enabled   additionally invoke the orchestrator to triage scope-only issues
+                     (2C). The LLM only classifies (read-only); the gate applies the
+                     verdict label deterministically, under a hard subprocess timeout.
 
 Exit codes: 0 ok (incl. lock-held-skip) · 2 auth/permission · 3 unexpected.
 """
@@ -28,6 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import executor
+import harness
 from classifier import IssueContext, classify
 
 MARKER_TOKEN = "max-agency-dispatch"
@@ -227,13 +232,20 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Max Agency gate (Phase 2A dry-run)")
     ap.add_argument("--repo", default=os.environ.get("PROJECT_REPO"), help="owner/repo")
     ap.add_argument("--scope-label", default="AI-GATE-TEST")
-    ap.add_argument("--mode", choices=["dry-run", "deterministic-only"], default="dry-run",
-                    help="dry-run prints only; deterministic-only also executes "
-                         "non-LLM moves (promote/close/approval routing)")
+    ap.add_argument("--mode", choices=["dry-run", "deterministic-only", "dispatch-enabled"],
+                    default="dry-run",
+                    help="dry-run prints only; deterministic-only also executes non-LLM "
+                         "moves (promote/close/approval routing); dispatch-enabled additionally "
+                         "invokes the orchestrator to triage scope-only issues (Phase 2C)")
     ap.add_argument("--audit-all-open", action="store_true",
                     help="also report open issues that would be ignored (no scope label)")
     ap.add_argument("--stuck-min", type=int, default=60)
     ap.add_argument("--stale-min", type=int, default=15, help="lock staleness threshold")
+    ap.add_argument("--triage-model", default=harness.DEFAULT_TRIAGE_MODEL,
+                    help="orchestrator model for triage (default: benchmarked gpt-5.4-mini, "
+                         "override via --triage-model or $GATE_TRIAGE_MODEL)")
+    ap.add_argument("--llm-timeout", type=int, default=harness.DEFAULT_LLM_TIMEOUT_S,
+                    help="hard timeout (s) per LLM/CLI call; a hung harness is killed")
     ap.add_argument("--runtime-dir", default="runtime")
     args = ap.parse_args(argv)
 
@@ -276,7 +288,8 @@ def main(argv: list[str] | None = None) -> int:
 
         pr_map = build_pr_map(prs)
         closed_numbers = {c["number"] for c in closed}
-        writer = executor.GitHubWriter(args.repo) if args.mode == "deterministic-only" else None
+        writes_enabled = args.mode in ("deterministic-only", "dispatch-enabled")
+        writer = executor.GitHubWriter(args.repo) if writes_enabled else None
 
         log("scan", scoped_issue_count=len(issues))
         counts: dict[str, int] = {}
@@ -302,6 +315,11 @@ def main(argv: list[str] | None = None) -> int:
                     except Exception as e:  # one bad write must not halt the board
                         log("mutation-error", issue=decision.number, op=op["op"], detail=repr(e))
 
+                # Phase 2C: the only LLM action wired in so far is triage. A failed/hung/
+                # unparsed triage is a no-op (logged, retried next tick) — never fatal.
+                if args.mode == "dispatch-enabled" and decision.intended_action == "would-triage":
+                    mutations += dispatch_triage(writer, issue, decision, args, log)
+
         if args.audit_all_open:
             audit_ignored(args, log)
 
@@ -314,6 +332,47 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         release_lock(lock_path, run_id)
         log_fp.close()
+
+
+def dispatch_triage(writer, issue: dict, decision, args, log) -> int:
+    """Invoke the orchestrator to triage one scope-only issue; apply the label deterministically.
+
+    Returns the number of mutations applied (0 on any failure — fail safe). The LLM only
+    classifies (read-only, no tools); the gate applies the verdict label via the executor.
+    """
+    n = decision.number
+    cmd = harness.build_triage_command(args.triage_model)
+    stdin = harness.issue_to_stdin(issue.get("title", "") or "", issue.get("body", "") or "")
+    result = harness.run_llm(cmd, args.llm_timeout, input_text=stdin)
+
+    if result["timed_out"]:
+        log("triage-timeout", issue=n, timeout_s=args.llm_timeout)
+        return 0
+    if result["returncode"] != 0:
+        log("triage-failed", issue=n, returncode=result["returncode"],
+            detail=(result["stderr"] or "")[:300])
+        return 0
+
+    label, reason = harness.parse_triage_verdict(result["stdout"])
+    if label is None:
+        log("triage-unparsed", issue=n, stdout=(result["stdout"] or "")[:300])
+        return 0
+
+    log("triage-verdict", issue=n, label=label, model=args.triage_model, reason=reason[:200])
+    mutations = 0
+    for op in executor.plan_triage_ops(n, label, reason):
+        try:
+            writer.apply(op)
+            mutations += 1
+            log("mutation", issue=n, op=op["op"])
+        except Exception as e:  # one bad write must not halt the board
+            log("mutation-error", issue=n, op=op["op"], detail=repr(e))
+            # If the label didn't land (e.g. a workflow label is missing from the repo),
+            # the issue stays scope-only — do NOT post the rationale comment, or it would
+            # duplicate every tick. Stop; next tick retries cleanly once labels exist.
+            if op["op"] == "edit_labels":
+                break
+    return mutations
 
 
 def issue_label_names(issue: dict) -> list[str]:
