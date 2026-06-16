@@ -57,17 +57,55 @@ decision logic is unit-testable without network. The thin `gh`/CLI layer is mock
 
 ---
 
-## 4. Environment (this new session runs locally — use it)
+## 4. Environment (this session runs ON the real Windows host — verify it every session)
+
+**The real host is `LAPTOP-GJG9H5TJ`, user `lobster`.** Claude Code's Bash/Edit/Read/Write
+tools, the Windows-MCP tools, and the user's own PowerShell all operate on the **same**
+Windows filesystem — proven by a bidirectional marker cross-test (2026-06-16). There is **no
+sandbox/overlay separation**: a file written by the Bash tool is immediately visible to the
+user's PowerShell, and vice-versa. *(An earlier session wrongly concluded "separate sandbox";
+the real cause was a not-yet-installed CLI + shell-PATH/WSL-vs-Windows confusion, not a split
+filesystem. Do not re-derive that wrong conclusion — verify instead, see the ritual below.)*
+
+### Two filesystems that ARE genuinely separate — keep them straight
+- **Windows** (`C:\Users\lobster\...`): runs `gh`, `codex`, `claude`, `python`, `git`. This is
+  where the repo lives and where the gate runs.
+- **WSL** (`/home/hermes/...`, distro user `hermes`): runs **only** `hermes` (the coder
+  harness), invoked from Windows as `wsl.exe -e bash -lc "..."`. Its `~/.hermes/` config and
+  `.env` live on the WSL filesystem, **not** on `C:\`. Do not try to run `codex`/`gh` *inside*
+  WSL (codex there is a broken snap) and do not look for hermes config under `C:\`.
+
+### Session-start verification ritual (do this FIRST, every session — don't trust prior claims)
+Run via **Windows-MCP PowerShell** (unambiguously the real host, fresh env each call):
+```powershell
+hostname; whoami                                   # expect LAPTOP-GJG9H5TJ / ...\lobster
+git -C C:\Users\lobster\Github_Projects\Max_Agency log --oneline -1   # confirm HEAD
+git -C C:\Users\lobster\Github_Projects\Max_Agency pull --ff-only      # sync first
+codex --version; (npm ls -g @openai/codex) ; gh --version              # Windows CLIs present?
+wsl -e bash -lc "which hermes; grep -i default ~/.hermes/profiles/coder/config.yaml"  # WSL side
+```
+**Never assume a CLI is installed because a previous session/summary said so — verify on disk.**
+
+### Tool-choice policy (the durable fix for the cross-session confusion)
+- **Code edits / fast file ops:** Bash + Edit/Read/Write are fine — they hit the real disk and
+  are git-backed anyway.
+- **Anything environment-sensitive — installing CLIs, running harnesses/benchmarks, checking
+  live config, anything PATH-dependent — prefer `mcp__Windows-MCP__PowerShell`.** It is
+  unambiguously the real Windows host with a fresh environment per call, so it sidesteps the
+  Git-Bash-vs-PowerShell PATH differences and stale-shell gotchas that caused the confusion.
+- **Source of truth is git.** Code always crosses sessions via commit+push / pull. Runtime
+  installs and live WSL config do NOT live in git — re-verify them each session (ritual above)
+  and ultimately automate them in Phase 3 `setup.ps1`.
 
 - Repo: `C:\Users\lobster\Github_Projects\Max_Agency` (Windows host).
 - Branch: **`claude/epic-faraday-5cbhk1`** — keep developing here; commit + push each phase.
   `git pull` first (previous sessions pushed here).
-- CLIs available (this is the point of running locally — actually exercise them):
+- CLIs (verify each session per the ritual — do not assume):
   - `gh` authed on **both** Windows and WSL.
   - `claude` (Claude Opus) — architect/CTO harness.
-  - `codex` (gpt-5.4-mini, ChatGPT-account auth) — orchestrator harness.
-  - `wsl.exe → hermes -p coder` (OpenRouter `xiaomi/mimo-v2.5`) — coder harness.
-  - `python3` — runs the gate.
+  - `codex` (gpt-5.4-mini, ChatGPT-account auth) — orchestrator harness, **Windows** install.
+  - `wsl.exe → hermes -p coder` (OpenRouter `xiaomi/mimo-v2.5`) — coder harness, **WSL** install.
+  - `python` / `python3` — runs the gate.
 - Scope label: **`AI-GATE-TEST`** during phases 2A–2E. It flips to **`AI`** only at 2F when
   the old pollers are retired.
 
