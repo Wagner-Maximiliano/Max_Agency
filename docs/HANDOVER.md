@@ -143,12 +143,15 @@ For every phase/sub-phase:
 
 **Phase 0 — model benchmark (do before 2C/2D dispatch real models).** 🟡 Coder done:
 `xiaomi/mimo-v2.5` scored 5/5, **promoted** (replaces interim `minimax/minimax-m3`).
-Orchestrator candidate is `gpt-5.4-mini` (cheapest variant this host's ChatGPT-account
-Codex login accepts — `gpt-5-mini` is rejected with HTTP 400), low reasoning effort;
-live triage benchmark (≥4/5 + well-formed task issues) not yet run. **Run it on the
-real host** — codex auth/model availability is host-specific, not reproducible in a
-sandbox. Benchmark issues `[BENCH-TRIAGE-1..5]` (#14-#18) are created and ready. Name a
-fallback per role. Treat `gpt-5.4-mini` as a **hypothesis until it passes.**
+Orchestrator done too: `gpt-5.4-mini` scored **5/5** on the triage benchmark (#14-#18),
+zero critical failures, **promoted** (fallback `nvidia/nemotron-3-super-120b-a12b:free`).
+Cheapest accepted Codex variant (`gpt-5-mini` rejected HTTP 400), `-c
+model_reasoning_effort=low`. Harness fixes from the live run: Windows `.cmd`-shim exec
+resolver (`node ...\codex.js`, no `cmd.exe`) and a neutral working dir for the
+orchestrator (codex under `danger-full-access` must not run inside the repo — it could
+read the answer key / unrelated files; neutral cwd also mirrors production triage).
+**Phase 0 models both pass.** Only Phase-0 leftover: delete one duplicate flow-diagram
+HTML (`max-agency-flow-diagram.html` vs `max-agency-flow-diagram(Production).html`).
 
 **Phase 2C — triage LLM (first real LLM call).** Gate invokes the orchestrator (gpt-5.4-mini)
 for scope-only issues to classify + label, or `needs-human`. **Add a hard subprocess timeout

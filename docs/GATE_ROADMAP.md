@@ -130,12 +130,15 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
   authenticated on the real host (ChatGPT-account login, `codex-cli 0.139.0`).
   Model availability verified live on that host: `gpt-5.4-mini` works, `gpt-5-mini`
   is rejected (HTTP 400 "not supported when using Codex with a ChatGPT account").
-  Orchestrator candidate is therefore `gpt-5.4-mini` (cheapest accepted variant,
-  low reasoning effort); `build_orchestrator_command` verified. **Note:** codex auth
-  and model availability are host-specific — the live triage benchmark must run on
-  the real host, not a sandboxed dev environment. Benchmark issues `[BENCH-TRIAGE-1..5]`
-  (#14-#18) are created and ready. Remaining: run the live orchestrator (triage)
-  benchmark on the host; delete one duplicate flow-diagram HTML
+  **Orchestrator (triage) benchmark also done:** `gpt-5.4-mini` scored **5/5** on the
+  same repo (triage issues #14-#18), zero critical failures, **promoted** (fallback
+  `nvidia/nemotron-3-super-120b-a12b:free`). Cheapest accepted Codex variant
+  (`gpt-5-mini` is rejected HTTP 400), `-c model_reasoning_effort=low`. Two harness
+  fixes landed live: a Windows `.cmd`-shim exec resolver (`node ...\codex.js`, avoids
+  `cmd.exe`/injection) and a **neutral working directory** for the orchestrator so
+  codex (under `danger-full-access`) can't read the benchmark answer key or repo files
+  — also mirrors production triage (issue + `gh` only). Both models now meet the
+  Phase 0 bar. Remaining: delete one duplicate flow-diagram HTML
   (`max-agency-flow-diagram.html` vs `max-agency-flow-diagram(Production).html`).
 - **Phase 1 — Cut MDP entirely.** ✅ **DONE.** Deleted 12 `skills/mdp-*` dirs + `docs/MDP.md`;
   stripped MDP refs from `agents/*.md`, `docs/AMA.md`, `skills/cto-review/SKILL.md`,

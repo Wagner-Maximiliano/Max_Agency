@@ -71,20 +71,25 @@ Status: harness built and unit-tested (72 tests). **Coder benchmark complete:**
 `~/.hermes/profiles/coder/config.yaml`), replacing the interim `minimax/minimax-m3`
 patch from commit `b36d723`. `minimax/minimax-m3` remains the named fallback.
 
-Orchestrator benchmark not yet run. `codex` CLI (`codex-cli 0.139.0`) installed and
-authenticated on the real host (ChatGPT-account login). Model availability verified
-live on that host: `gpt-5.4-mini` works, while `gpt-5-mini` is **rejected** with
-HTTP 400 ("not supported when using Codex with a ChatGPT account"). The orchestrator
-candidate is therefore `gpt-5.4-mini` (cheapest accepted variant) with
-`-c model_reasoning_effort=low` (triage is simple classification; low effort reduces
-usage-quota consumption). `build_orchestrator_command` verified against the real CLI
-(`-s danger-full-access` for `gh` label/comment writes, `--skip-git-repo-check`).
+**Orchestrator benchmark complete:** `gpt-5.4-mini` scored **5/5** on
+`Wagner-Maximiliano/MDP-Massive-Development-Plan` (triage issues #14–#18), zero
+critical failures — **promoted**. It correctly classified `role:coder` (#14),
+`role:architect` (#15, #17), `needs-human` (#16), and recognized the deliberately
+bundled typo-fix-plus-CI-rewrite (#18) instead of silently mislabeling it. `codex`
+CLI (`codex-cli 0.139.0`) is authenticated on the real host (ChatGPT-account login);
+`gpt-5.4-mini` is the cheapest accepted variant (`gpt-5-mini` is rejected with
+HTTP 400), run with `-c model_reasoning_effort=low`. Named fallback:
+`nvidia/nemotron-3-super-120b-a12b:free`.
 
-> **Environment note:** codex auth and model availability are host-specific, so the
-> orchestrator benchmark must be run on the real host where the gate will run, not in
-> a sandboxed dev environment. The benchmark issues (`[BENCH-TRIAGE-1..5]`, issues
-> #14–#18 on `Wagner-Maximiliano/MDP-Massive-Development-Plan`) are created and ready;
-> the live triage run is pending execution on the host.
+Two harness fixes landed during the live run:
+- **Windows exec shim:** `codex` on Windows is a `.cmd` npm shim that `subprocess`
+  can't launch directly (`[WinError 2]`). `_runnable_argv` rewrites it to invoke the
+  underlying `node ...\codex.js`, avoiding `cmd.exe` (so no shell-quoting/injection
+  surface when issue text is later passed through — Phase 2C).
+- **Neutral working directory:** the orchestrator (codex under `danger-full-access`)
+  now runs from a throwaway temp dir, never the repo. Running it inside the repo let
+  codex read the benchmark's own answer key (`tasks.py` rubric); the neutral cwd also
+  mirrors production triage (issue + `gh` only).
 
 ## Not in Phase 2A (deferred on purpose)
 

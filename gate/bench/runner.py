@@ -19,8 +19,11 @@ killed and reported as `timed_out`, never left to hang the benchmark.
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 
 from tasks import CODER_TASKS, MODEL_CANDIDATES, TRIAGE_TASKS
 
@@ -74,14 +77,47 @@ def _shquote(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
 
 
-def run_with_timeout(cmd: list[str], timeout_s: int) -> dict:
-    """Thin: run cmd, hard-kill on timeout. Returns a result dict, never raises on timeout."""
+def _runnable_argv(cmd: list[str]) -> list[str]:
+    """Resolve cmd[0] to something subprocess can exec directly on this platform.
+
+    On Windows, npm-installed CLIs like `codex` are `.cmd` shims, which
+    `subprocess.run` cannot launch directly (raises `[WinError 2]`). Rewrite to
+    invoke the underlying Node entrypoint (`node ...\\codex.js ...`) so the
+    benchmark prompt stays a plain argv element — no `cmd.exe`, hence no shell
+    quoting and no injection surface when issue text is later passed through
+    (roadmap security rule: never interpolate untrusted text into a shell).
+    No-op on POSIX and for real `.exe` targets (e.g. `wsl.exe`).
+    """
+    if os.name != "nt" or not cmd:
+        return cmd
+    resolved = shutil.which(cmd[0])
+    if resolved is None or not resolved.lower().endswith((".cmd", ".bat")):
+        return cmd if resolved is None else [resolved, *cmd[1:]]
+    name = os.path.splitext(os.path.basename(resolved))[0]
+    js = os.path.join(os.path.dirname(resolved), "node_modules", "@openai", name, "bin", f"{name}.js")
+    node = shutil.which("node")
+    if node and os.path.exists(js):
+        return [node, js, *cmd[1:]]
+    # Last resort: run the shim through the command processor (argv preserved).
+    return [os.environ.get("COMSPEC", "cmd.exe"), "/c", resolved, *cmd[1:]]
+
+
+def run_with_timeout(cmd: list[str], timeout_s: int, cwd: str | None = None) -> dict:
+    """Thin: run cmd, hard-kill on timeout. Returns a result dict, never raises on timeout.
+
+    `cwd` sets the child's working directory. For the orchestrator (codex under
+    `danger-full-access`) this MUST be a neutral dir, never the Max Agency repo:
+    triage only needs the issue + `gh`, and running it inside the repo lets codex
+    read the benchmark's own answer key (`tasks.py` rubric/expected_labels) or, in
+    production, unrelated repo files — contaminating the classification.
+    """
+    cmd = _runnable_argv(cmd)
     try:
         # wsl.exe / hermes output isn't reliably in the Windows console's locale
         # encoding (cp1252); decode as UTF-8 and replace anything that isn't,
         # rather than crashing the reader thread on a stray byte.
         out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", timeout=timeout_s)
+                              errors="replace", timeout=timeout_s, cwd=cwd)
     except subprocess.TimeoutExpired as e:
         return {
             "returncode": None, "timed_out": True,
@@ -139,7 +175,14 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         print(" ".join(cmd))
         return 0
 
-    result = run_with_timeout(cmd, args.timeout)
+    # Orchestrator (codex, danger-full-access) must NOT run inside the Max Agency
+    # repo, or it can read the benchmark answer key / unrelated files. Run it from a
+    # throwaway empty dir so it behaves like production triage (issue + `gh` only).
+    if args.role == "orchestrator":
+        with tempfile.TemporaryDirectory(prefix="bench-triage-") as neutral:
+            result = run_with_timeout(cmd, args.timeout, cwd=neutral)
+    else:
+        result = run_with_timeout(cmd, args.timeout)
     print(f"timed_out={result['timed_out']} returncode={result['returncode']}")
     print("--- stdout ---")
     print(result["stdout"])

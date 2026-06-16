@@ -3,6 +3,7 @@
 No real `wsl`/`hermes`/`codex`/`gh` calls — subprocess is mocked.
 """
 
+import os
 import subprocess
 
 import runner
@@ -25,6 +26,36 @@ def test_build_orchestrator_command_uses_codex_with_model_and_issue():
     assert "gpt-5.4-mini" in cmd
     assert "danger-full-access" in cmd
     assert any("#7 in owner/repo" in part for part in cmd)
+
+
+def test_runnable_argv_noop_on_posix(monkeypatch):
+    monkeypatch.setattr(runner.os, "name", "posix")
+    cmd = ["codex", "exec", "-m", "gpt-5.4-mini"]
+    assert runner._runnable_argv(cmd) == cmd
+
+
+def test_runnable_argv_rewrites_windows_cmd_shim_to_node(monkeypatch):
+    monkeypatch.setattr(runner.os, "name", "nt")
+
+    def fake_which(name):
+        return {
+            "codex": r"C:\npm\codex.CMD",
+            "node": r"C:\nodejs\node.EXE",
+        }.get(name)
+
+    monkeypatch.setattr(runner.shutil, "which", fake_which)
+    monkeypatch.setattr(runner.os.path, "exists", lambda p: True)
+    out = runner._runnable_argv(["codex", "exec", "-m", "gpt-5.4-mini"])
+    assert out[0] == r"C:\nodejs\node.EXE"
+    assert out[1].endswith(os.path.join("bin", "codex.js"))
+    assert out[2:] == ["exec", "-m", "gpt-5.4-mini"]
+
+
+def test_runnable_argv_passthrough_for_real_exe(monkeypatch):
+    monkeypatch.setattr(runner.os, "name", "nt")
+    monkeypatch.setattr(runner.shutil, "which", lambda n: r"C:\Windows\System32\wsl.exe")
+    out = runner._runnable_argv(["wsl.exe", "-e", "bash"])
+    assert out == [r"C:\Windows\System32\wsl.exe", "-e", "bash"]
 
 
 def test_run_with_timeout_returns_timed_out_on_timeout(monkeypatch):
