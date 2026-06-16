@@ -22,6 +22,7 @@ Exit codes: 0 ok (incl. lock-held-skip) · 2 auth/permission · 3 unexpected.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -198,6 +199,8 @@ def build_context(issue: dict, pr_map: dict, closed_numbers: set[int], stuck_min
         approval=parse_approval(comments),
         marker_active=marker_is_active(marker, stuck_min),
         kickoff_created=bool(marker_fields and marker_fields.get("status") == "kickoff-created"),
+        kickoff_expanded=bool(marker_fields and
+                              marker_fields.get("status") in ("expanding", "expanded")),
         attempt=_marker_attempt(marker_fields),
         marker_comment_id=marker_comment_id,
         linked_pr_open=bool(pr and pr["state"] == "OPEN"),
@@ -217,6 +220,22 @@ def _marker_attempt(marker_fields: dict | None) -> int:
         return 0
     raw = str(marker_fields.get("attempt", "")).strip()
     return int(raw) if raw.isdigit() else 0
+
+
+def parse_parent_ref(body: str) -> int | None:
+    """The parent issue number a kickoff was created from (`Approved-plan: #N`)."""
+    m = re.search(r"Approved-plan:\s*#(\d+)", body or "")
+    return int(m.group(1)) if m else None
+
+
+def _issue_number_from_url(url: str | None) -> int | None:
+    m = re.search(r"/issues/(\d+)", url or "")
+    return int(m.group(1)) if m else None
+
+
+def _comment_id_from_url(url: str | None) -> str | None:
+    m = re.search(r"#issuecomment-(\d+)", url or "")
+    return m.group(1) if m else None
 
 
 def parse_depends_on(body: str) -> list[int]:
@@ -394,6 +413,9 @@ def main(argv: list[str] | None = None) -> int:
                     act = decision.intended_action
                     if act == "would-triage":
                         mutations += dispatch_triage(writer, issue, decision, args, log)
+                    elif act == "would-expand-kickoff":
+                        mutations += dispatch_expand(writer, issue, ctx, decision,
+                                                     run_id, args, log)
                     elif act == "would-invoke-architect":
                         mutations += dispatch_architect(writer, issue, ctx, decision,
                                                         run_id, args, log)
@@ -523,6 +545,84 @@ def dispatch_coder(writer, ctx, decision, run_id, args, log, from_label) -> int:
             detail=(result["stderr"] or "")[:300])
     else:
         log("coder-done", issue=n, attempt=attempt, returncode=result["returncode"])
+    return mutations
+
+
+def dispatch_expand(writer, issue, ctx, decision, run_id, args, log) -> int:
+    """Expand a kickoff issue's approved PLAN into concrete coder task issues (orchestrator).
+
+    Read-only generation (codex, PLAN on stdin, neutral cwd); the gate creates the issues,
+    resolving each task's deps to the real numbers created earlier in this run. An in-flight
+    `expanding` marker is written BEFORE any create, so a crash can't trigger a re-expand
+    (duplicate tasks); on success the kickoff is marked `expanded` and closed. Fail-safe.
+    """
+    n = decision.number  # the kickoff issue
+    parent = parse_parent_ref(issue.get("body", "") or "")
+    if parent is None:
+        log("expand-no-parent", issue=n)
+        return 0
+    try:
+        encoded = gh_text(["api", f"repos/{args.repo}/contents/plans/issue-{parent}/PLAN.md",
+                           "--jq", ".content"])
+        plan_md = base64.b64decode(encoded).decode("utf-8", "replace") if encoded.strip() else ""
+    except (GhError, ValueError) as e:
+        log("expand-no-plan", issue=n, parent=parent, detail=str(e)[:200])
+        return 0
+    if not plan_md.strip():
+        log("expand-empty-plan", issue=n, parent=parent)
+        return 0
+
+    cmd = harness.build_expand_command(args.triage_model)
+    with tempfile.TemporaryDirectory(prefix="maxagency-expand-") as neutral_cwd:
+        result = harness.run_llm(cmd, args.llm_timeout, input_text=plan_md, cwd=neutral_cwd)
+    if result["timed_out"]:
+        log("expand-timeout", issue=n, timeout_s=args.llm_timeout)
+        return 0
+    if result["returncode"] not in (0, None):
+        log("expand-failed", issue=n, returncode=result["returncode"],
+            detail=(result["stderr"] or "")[:300])
+        return 0
+    tasks = harness.parse_expand_tasks(result["stdout"])
+    if not tasks:
+        log("expand-unparsed", issue=n, stdout=(result["stdout"] or "")[:300])
+        return 0
+
+    # In-flight claim FIRST (idempotency). Capture the new marker comment id so the
+    # `expanded` finalize edits the same comment in place rather than adding a second.
+    mutations = 0
+    marker_cid = ctx.marker_comment_id
+    try:
+        out = writer.apply(executor.plan_expand_claim_op(n, run_id, marker_cid))
+        marker_cid = marker_cid or _comment_id_from_url(out)
+        mutations += 1
+        log("mutation", issue=n, op="upsert_marker")
+    except Exception as e:
+        log("mutation-error", issue=n, op="upsert_marker", detail=repr(e))
+        return mutations  # couldn't claim; next tick retries cleanly
+
+    created: list[int] = []
+    for task in tasks:
+        dep_numbers = [created[j - 1] for j in task["depends_on"] if 1 <= j <= len(created)]
+        op = executor.plan_task_issue_op(parent, n, args.scope_label,
+                                         task["title"], task["body"], dep_numbers)
+        try:
+            num = _issue_number_from_url(writer.apply(op))
+            if num is not None:
+                created.append(num)
+            mutations += 1
+            log("mutation", issue=n, op="create_issue", created=num)
+        except Exception as e:  # stop (later tasks may depend on this one); marker stays expanding
+            log("mutation-error", issue=n, op="create_issue", detail=repr(e))
+            break
+
+    log("expand-done", issue=n, parent=parent, created=created, n_tasks=len(tasks))
+    for op in executor.plan_kickoff_finalize_ops(n, created, run_id, marker_cid):
+        try:
+            writer.apply(op)
+            mutations += 1
+            log("mutation", issue=n, op=op["op"])
+        except Exception as e:
+            log("mutation-error", issue=n, op=op["op"], detail=repr(e))
     return mutations
 
 

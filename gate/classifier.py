@@ -44,6 +44,8 @@ class IssueContext:
     kickoff_created: bool = False
     # latest coder dispatch attempt recorded in the marker (0 = none yet); caps recovery
     attempt: int = 0
+    # a kickoff issue whose marker shows it is being / has been expanded (idempotency)
+    kickoff_expanded: bool = False
     # issue title (used by the executor when creating a linked kickoff issue)
     title: str = ""
     # comment id of the existing per-issue marker, if any (for in-place edit)
@@ -105,8 +107,10 @@ def classify(ctx: IssueContext) -> Decision:
             return d("plan-ready", "would-reopen-architect", "owner requested changes")
         return d("plan-ready", "no-action", "awaiting approval comment")
 
-    # 7. Kickoff issue → expand the PLAN into task issues.
+    # 7. Kickoff issue → expand the PLAN into task issues (once).
     if "kickoff" in labels:
+        if ctx.kickoff_expanded:
+            return d("kickoff", "no-action", "kickoff already expanded")
         return d("kickoff", "would-expand-kickoff", "kickoff present", llm="orchestrator")
 
     # 8–10. Coder lane.

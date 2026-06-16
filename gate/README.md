@@ -59,6 +59,16 @@ inside our checkout). At most one coder is dispatched per tick (a build is long 
 Every architect/CTO call is pure text generation (no tools), under the hard `--claude-timeout`,
 from a neutral cwd; a hung/failed/unparsed result is a logged no-op, retried next tick.
 
+**Kickoff expansion (orchestrator):** closes the new-idea loop. A `kickoff` issue (created by
+2B on `APPROVE`) is expanded by the orchestrator (`gpt-5.4-mini` via `codex`, read-only): the
+gate feeds the approved `PLAN.md` on stdin, the model returns a strict JSON array of 1–6
+task specs (`title`/`body`/`depends_on`), and the gate creates one coder task issue per task
+(no deps → `role:coder`+`ready`; with deps → `backlog` + a `Depends-on: #…` line resolved to
+the real numbers, promoted by 2B once the deps close). An in-flight `expanding` marker is
+written **before** any create (a crash can't trigger a duplicate expand); on success the
+kickoff is marked `expanded` and closed. This makes the full chain — idea → triage →
+architect → plan → approve → kickoff → **expand** → coder → PR → CTO → merge — complete.
+
 > **Setup dependency:** the gate's writes require the full workflow label set to **exist on
 > the repo** (scope label + `role:*` + `backlog`/`ready`/`in-progress`/`plan-ready`/`kickoff`/
 > `needs-human`). A missing label makes the atomic label-edit fail safely (logged, no comment,

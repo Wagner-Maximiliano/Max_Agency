@@ -150,6 +150,45 @@ def plan_architect_ops(issue_number: int, plan_md: str, run_id: str,
     ]
 
 
+# ── Kickoff expansion: PLAN → coder task issues ───────────────────────────────
+def plan_expand_claim_op(kickoff_number: int, run_id: str, comment_id: str | None,
+                         ts: str | None = None) -> dict:
+    """In-flight claim marker written BEFORE creating tasks (idempotency: a crash mid-expand
+    leaves status `expanding`, which the classifier treats as 'do not re-expand')."""
+    ts = ts or _now_iso()
+    return {"op": "upsert_marker", "issue": kickoff_number, "comment_id": comment_id,
+            "body": render_marker({"run_id": run_id, "issue": kickoff_number,
+                                   "role": "orchestrator", "status": "expanding", "ts": ts})}
+
+
+def plan_task_issue_op(parent_number: int, kickoff_number: int, scope_label: str,
+                       title: str, body: str, dep_numbers: list[int]) -> dict:
+    """Pure: build the create-op for one coder task issue. No deps → enter at `ready`;
+    with deps → `backlog` (+ Depends-on line) so 2B promotes it once the deps close."""
+    deps_line = ("\nDepends-on: " + ",".join(f"#{d}" for d in dep_numbers)) if dep_numbers else ""
+    full_body = (f"{body}\n\nParent: #{parent_number}\nKickoff: #{kickoff_number}\n"
+                 f"Plan: /plans/issue-{parent_number}/PLAN.md{deps_line}")
+    state = "backlog" if dep_numbers else "ready"
+    return {"op": "create_issue", "title": title, "body": full_body,
+            "labels": [scope_label, "role:coder", state]}
+
+
+def plan_kickoff_finalize_ops(kickoff_number: int, created_numbers: list[int], run_id: str,
+                              comment_id: str | None, ts: str | None = None) -> list[dict]:
+    """Pure: mark the kickoff `expanded` and close it (so it leaves the open-issue scope)."""
+    ts = ts or _now_iso()
+    marker = {"run_id": run_id, "issue": kickoff_number, "role": "orchestrator",
+              "status": "expanded", "ts": ts}
+    tasks = ", ".join(f"#{n}" for n in created_numbers) or "(none)"
+    return [
+        {"op": "upsert_marker", "issue": kickoff_number, "comment_id": comment_id,
+         "body": render_marker(marker)},
+        {"op": "close", "issue": kickoff_number, "reason": "completed",
+         "comment": f"Closed by gate: expanded the approved plan into "
+                    f"{len(created_numbers)} task issue(s): {tasks}."},
+    ]
+
+
 # ── Phase 2E: CTO verdict routing ─────────────────────────────────────────────
 def plan_cto_ops(verdict: str, human_review: bool | None, reason: str, issue_number: int,
                  pr_number: int, run_id: str, comment_id: str | None,
@@ -283,7 +322,9 @@ class GitHubWriter:
             raise RuntimeError((out.stderr or "gh failed").strip())
         return out.stdout
 
-    def apply(self, op: dict) -> None:
+    def apply(self, op: dict):
+        """Apply one mutation op. Returns the `gh` stdout for create ops (issue URL / comment
+        URL) so callers can capture the new number/id; None otherwise."""
         kind = op["op"]
         repo = ["--repo", self.repo]
         if kind == "edit_labels":
@@ -312,13 +353,14 @@ class GitHubWriter:
             args = ["issue", "create", *repo, "--title", op["title"], "--body", op["body"]]
             for lab in op.get("labels", []):
                 args += ["--label", lab]
-            self._run(args)
+            return self._run(args)  # stdout = new issue URL (caller parses the number)
         elif kind == "upsert_marker":
             cid = op.get("comment_id")
             if cid:  # edit the existing per-issue marker in place
                 self._update_comment(cid, op["body"])
-            else:
-                self._run(["issue", "comment", str(op["issue"]), *repo, "--body", op["body"]])
+            else:  # stdout = new comment URL (caller can capture the id)
+                return self._run(["issue", "comment", str(op["issue"]), *repo,
+                                  "--body", op["body"]])
         elif kind == "upsert_file":
             self._upsert_file(op["path"], op["content"], op["message"], op.get("branch"))
         elif kind == "merge_pr":

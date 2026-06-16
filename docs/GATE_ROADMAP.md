@@ -184,6 +184,13 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     `updateIssueComment` (node id) — REST PATCH 404s on the node id `gh` returns, which had
     let a failed marker write risk a *duplicate kickoff*; (b) `edit_labels` does adds-first
     then removes in separate calls, so a missing repo label can't half-strip an issue.
+  - **Kickoff expansion** (orchestrator) ✅ **DONE — built, 138 unit tests, validated live.**
+    Closes a gap between 2E and 2F: the `would-expand-kickoff` action was in the state machine
+    but never wired. The orchestrator (`gpt-5.4-mini` via `codex`, read-only, approved
+    `PLAN.md` on stdin) returns a JSON array of 1–6 task specs; the gate creates one coder
+    task issue each (no-dep → `ready`, dep → `backlog` + `Depends-on:` resolved to real
+    numbers), writes an in-flight `expanding` marker before any create (idempotent), then
+    marks the kickoff `expanded` and closes it. The full new-idea → merge chain now connects.
   - **2F** decommission old pollers; cut scope label to `AI`; move single scheduler to Windows.
 - **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1` that **implements
   the `SETUP.md` checklist** (created/maintained incrementally from Phase 2C on — setup

@@ -74,8 +74,13 @@ with no manual label-fixing and no babysitting.
 - **Phase 1 — MDP cut** ✅ deleted `skills/mdp-*` + `docs/MDP.md`; stripped MDP refs from
   `agents/*.md`, `docs/AMA.md`, top-level docs, and hermes profile configs; folded the
   file-safety/verification-rollback rules into `CODING_STANDARDS.md` §13.
-- **129 gate unit tests passing.** Phases 2A–2E validated live on a throwaway repo (test
-  issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
+- **Kickoff expansion** ✅ closes a 2E↔2F gap: `would-expand-kickoff` (orchestrator) was in
+  the state machine but unwired. codex (read-only, approved `PLAN.md` on stdin) → JSON task
+  specs → the gate creates coder task issues (no-dep `ready`, dep `backlog` + `Depends-on:`
+  resolved to real numbers), `expanding` marker before any create (idempotent), then marks
+  the kickoff `expanded` + closes it. The full idea→merge chain now connects end to end.
+- **138 gate unit tests passing.** Phases 2A–2E + kickoff-expansion validated live on a
+  throwaway repo (test issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
   must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
   caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
   WSL* (coder), the `claude` CLI authed (architect/CTO), and the neutral-cwd safeguard.
