@@ -141,7 +141,7 @@ For every phase/sub-phase:
 
 ## 6. Remaining work (in order)
 
-**Phase 0 — model benchmark (do before 2C/2D dispatch real models).** 🟡 Coder done:
+**Phase 0 — model benchmark (do before 2C/2D dispatch real models).** ✅ **DONE.** Coder:
 `xiaomi/mimo-v2.5` scored 5/5, **promoted** (replaces interim `minimax/minimax-m3`).
 Orchestrator done too: `gpt-5.4-mini` scored **5/5** on the triage benchmark (#14-#18),
 zero critical failures, **promoted** (fallback `nvidia/nemotron-3-super-120b-a12b:free`).
@@ -150,8 +150,8 @@ model_reasoning_effort=low`. Harness fixes from the live run: Windows `.cmd`-shi
 resolver (`node ...\codex.js`, no `cmd.exe`) and a neutral working dir for the
 orchestrator (codex under `danger-full-access` must not run inside the repo — it could
 read the answer key / unrelated files; neutral cwd also mirrors production triage).
-**Phase 0 models both pass.** Only Phase-0 leftover: delete one duplicate flow-diagram
-HTML (`max-agency-flow-diagram.html` vs `max-agency-flow-diagram(Production).html`).
+**Phase 0 is closed** — both models pass. (Duplicate flow-diagram HTML cleanup
+intentionally deferred; cosmetic, not a gate dependency.) **Next: Phase 2C.**
 
 **Phase 2C — triage LLM (first real LLM call).** Gate invokes the orchestrator (gpt-5.4-mini)
 for scope-only issues to classify + label, or `needs-human`. **Add a hard subprocess timeout

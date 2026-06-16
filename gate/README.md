@@ -4,7 +4,7 @@ The gate is the single deterministic entry point that replaces the old polling d
 See the roadmap (`Simplification & Reliability Roadmap v3`) for the full design. This
 directory is being built **one phase at a time, beside the old system**.
 
-## Status: Phase 2A ✅ + Phase 2B ✅
+## Status: Phase 0 ✅ + Phase 2A ✅ + Phase 2B ✅
 
 **2A — dry-run (read-only):** reads scoped issues, classifies via the state-machine table,
 prints the intended action (unknown/conflicting → `unknown-state`, no action; one corrupt
@@ -80,6 +80,9 @@ CLI (`codex-cli 0.139.0`) is authenticated on the real host (ChatGPT-account log
 `gpt-5.4-mini` is the cheapest accepted variant (`gpt-5-mini` is rejected with
 HTTP 400), run with `-c model_reasoning_effort=low`. Named fallback:
 `nvidia/nemotron-3-super-120b-a12b:free`.
+
+**Phase 0 is closed** — both models meet the bar. (The duplicate flow-diagram HTML
+cleanup was intentionally deferred: cosmetic, not a gate dependency.)
 
 Two harness fixes landed during the live run:
 - **Windows exec shim:** `codex` on Windows is a `.cmd` npm shim that `subprocess`

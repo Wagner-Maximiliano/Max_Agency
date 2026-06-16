@@ -12,7 +12,7 @@ state, LLMs called only when needed, one `AI` label as the human interface, MDP 
 
 **Decisions locked in:**
 - Keep all **3 vendors** (Claude, Codex, OpenRouter) — multi-vendor cross-review is a strength.
-- **Candidate** models (to be *benchmarked, not assumed* — see Phase 0): orchestrator =
+- Models (**benchmarked + promoted in Phase 0**, 5/5 each): orchestrator =
   `gpt-5.4-mini` (Codex); coder = `xiaomi/mimo-v2.5` (OpenRouter); CTO + Architect = Claude Opus.
 - One scheduled **deterministic gate** dispatches; workers never self-schedule.
 - Single opt-in label **`AI`** = human on-switch + gate scope filter + kill-switch.
@@ -121,7 +121,7 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
 
 ## Phased plan (boring, sequential, reversible)
 
-- **Phase 0 — Doc-truth + model benchmark.** 🟡 **PARTIAL.** Coder benchmark done:
+- **Phase 0 — Doc-truth + model benchmark.** ✅ **DONE.** Coder benchmark done:
   `xiaomi/mimo-v2.5` scored 5/5 on `Wagner-Maximiliano/MDP-Massive-Development-Plan`
   (issues #4-#8, PRs #9-#13), zero critical failures, **promoted** — now
   `model.default` in `hermes-config/profiles/coder/config.yaml` and the live
@@ -137,9 +137,10 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
   fixes landed live: a Windows `.cmd`-shim exec resolver (`node ...\codex.js`, avoids
   `cmd.exe`/injection) and a **neutral working directory** for the orchestrator so
   codex (under `danger-full-access`) can't read the benchmark answer key or repo files
-  — also mirrors production triage (issue + `gh` only). Both models now meet the
-  Phase 0 bar. Remaining: delete one duplicate flow-diagram HTML
-  (`max-agency-flow-diagram.html` vs `max-agency-flow-diagram(Production).html`).
+  — also mirrors production triage (issue + `gh` only). Both models meet the Phase 0
+  bar → **Phase 0 closed.** (Duplicate flow-diagram HTML cleanup —
+  `max-agency-flow-diagram.html` vs `max-agency-flow-diagram(Production).html` —
+  intentionally deferred; cosmetic, not a gate dependency.)
 - **Phase 1 — Cut MDP entirely.** ✅ **DONE.** Deleted 12 `skills/mdp-*` dirs + `docs/MDP.md`;
   stripped MDP refs from `agents/*.md`, `docs/AMA.md`, `skills/cto-review/SKILL.md`,
   `Highlevel_Plan_V2.0.md`, `README.md`, `Human_Runbook.md`, and the hermes profile
@@ -184,7 +185,7 @@ PRs, CI, human board. Cross-vendor review preserved (mimo/GPT build → Claude C
 
 ## Verification (dry-run first, per sub-phase)
 
-- **Phase 0:** models pass benchmark before promotion; docs match runtime.
+- **Phase 0:** ✅ both models passed (coder + orchestrator 5/5, promoted); docs match runtime.
 - **Phase 1:** `grep -ri mdp` returns only history; agents still plan/build/review end-to-end.
 - **Phase 2A:** ✅ printed decisions correct on live repo; scoped query excludes non-scope issues;
   run lock prevents overlap; structured logs emitted; zero mutations.
