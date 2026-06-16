@@ -87,12 +87,18 @@ wsl -e bash -lc "which hermes; grep -i default ~/.hermes/profiles/coder/config.y
 **Never assume a CLI is installed because a previous session/summary said so — verify on disk.**
 
 ### Tool-choice policy (the durable fix for the cross-session confusion)
-- **Code edits / fast file ops:** Bash + Edit/Read/Write are fine — they hit the real disk and
-  are git-backed anyway.
-- **Anything environment-sensitive — installing CLIs, running harnesses/benchmarks, checking
-  live config, anything PATH-dependent — prefer `mcp__Windows-MCP__PowerShell`.** It is
-  unambiguously the real Windows host with a fresh environment per call, so it sidesteps the
-  Git-Bash-vs-PowerShell PATH differences and stale-shell gotchas that caused the confusion.
+Same environment ⇒ **the built-in Bash tool is the default workhorse** — it hits the real
+disk, real network, and real CLIs (`gh`/`codex`/`python`/`wsl→hermes` all resolve on Git
+Bash's PATH), and it's faster/lighter than Windows-MCP. Use it for code, git, file ops, and
+running the harnesses.
+- **`mcp__Windows-MCP__PowerShell` is a narrow verification/tiebreaker tool, NOT the daily
+  driver** (it's heavier and slower). Reach for it only when **shell context itself matters**:
+  reproducing exactly what the user's PowerShell sees (PATH / env-var debugging like the
+  codex-not-found episode), or a tool that genuinely misbehaves outside PowerShell.
+- **The actual durable fixes are the ritual above, not a tool swap:** (1) verify CLIs *on disk*
+  each session instead of trusting a prior "installed" claim; (2) remember Git Bash and
+  PowerShell have **different PATHs on the same machine** — "resolves in Bash, not in PS" is a
+  PATH/stale-shell issue, never a separate-filesystem issue.
 - **Source of truth is git.** Code always crosses sessions via commit+push / pull. Runtime
   installs and live WSL config do NOT live in git — re-verify them each session (ritual above)
   and ultimately automate them in Phase 3 `setup.ps1`.
