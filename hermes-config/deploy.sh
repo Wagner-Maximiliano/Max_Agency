@@ -1,67 +1,33 @@
 #!/usr/bin/env bash
-# deploy.sh — sync repo configs to live WSL installation
+# deploy.sh — sync the repo's hermes coder profile to the live WSL installation.
 #
-# Run this after any git pull on Max_Agency to apply config changes.
-# Usage: bash hermes-config/deploy.sh
+# As of Phase 2F the old polling system is retired: the WSL hermes *tick* timers/services
+# and the orchestrator-mechanics script are gone, and the gate (a single Windows Scheduled
+# Task) is the only scheduled job. The one piece the gate still depends on in WSL is the
+# **coder profile** — the gate's coder harness invokes `hermes -p coder`, which reads
+# ~/.hermes/profiles/coder/config.yaml (model.default = the benchmarked coder model).
 #
-# What it does:
-#   1. Copies profile configs to ~/.hermes/profiles/
-#   2. Copies service files to ~/.config/systemd/user/
-#   3. Reloads systemd
+# Run this after a git pull when the coder profile changed:  bash hermes-config/deploy.sh
+#
+# (The hermes *gateway* service — hermes-gateway.service — is managed separately and is NOT
+# touched here. PROJECT_REPO / OPENROUTER_API_KEY live in ~/.hermes/.env, also not touched.)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
-SYSTEMD_DIR="${SYSTEMD_DIR:-$HOME/.config/systemd/user}"
 
 log() { echo "[deploy] $*"; }
 
-# ── Profile configs ──────────────────────────────────────────────────────────
-for profile in orchestrator coder; do
-  src="$SCRIPT_DIR/profiles/$profile/config.yaml"
-  dst="$HERMES_HOME/profiles/$profile/config.yaml"
-  if [[ -f "$src" ]]; then
-    mkdir -p "$(dirname "$dst")"
-    cp "$src" "$dst"
-    log "copied profiles/$profile/config.yaml"
-  fi
-done
-
-# ── Service files ────────────────────────────────────────────────────────────
-for svc in hermes-orchestrator-tick hermes-coder-tick; do
-  src="$SCRIPT_DIR/${svc}.service"
-  dst="$SYSTEMD_DIR/${svc}.service"
-  if [[ -f "$src" ]]; then
-    # Preserve the machine-specific Environment= line (PATH) if present
-    env_line=$(grep "^Environment=" "$dst" 2>/dev/null || true)
-    cp "$src" "$dst"
-    if [[ -n "$env_line" ]]; then
-      # Re-inject the machine-specific PATH line after EnvironmentFile=
-      sed -i "/^EnvironmentFile=/a $env_line" "$dst"
-    fi
-    log "copied ${svc}.service"
-  fi
-done
-
-# ── Orchestrator mechanics script ────────────────────────────────────────────
-src="$SCRIPT_DIR/orchestrator-mechanics.sh"
-dst="$HERMES_HOME/profiles/orchestrator/orchestrator-mechanics.sh"
+# ── Coder profile config (the only profile the gate uses) ────────────────────
+src="$SCRIPT_DIR/profiles/coder/config.yaml"
+dst="$HERMES_HOME/profiles/coder/config.yaml"
 if [[ -f "$src" ]]; then
+  mkdir -p "$(dirname "$dst")"
   cp "$src" "$dst"
-  chmod +x "$dst"
-  log "copied orchestrator-mechanics.sh"
+  log "synced profiles/coder/config.yaml"
+else
+  log "WARNING: $src not found — coder profile not synced"
 fi
 
-# ── Reload systemd ───────────────────────────────────────────────────────────
-systemctl --user daemon-reload
-log "systemd daemon-reload done"
-
-# Restart services if they're not currently running (oneshot — safe to restart)
-for svc in hermes-orchestrator-tick hermes-coder-tick; do
-  if ! systemctl --user is-active --quiet "${svc}.service" 2>/dev/null; then
-    log "${svc}.service not running — no restart needed (timer will fire it)"
-  fi
-done
-
-log "deploy complete"
+log "deploy complete (coder profile only; the gate is the single scheduler — see scripts/register-gate-task.ps1)"

@@ -227,10 +227,15 @@ YES|NO`) that the gate routes deterministically (incl. squash-merge under
 `--auto-merge`/CI-green, else hold for a human). Approval-comment rules honored (owner-only,
 latest comment, ignore bots/quotes/markers — the 2B path). **Next: Phase 2F.**
 
-**Phase 2F — retire the old pollers.** Only after 2A–2E run stably on a live project: remove
-the Hermes coder timer/self-poll and the Claude Code 5-min routine; delete legacy
-self-heal/claim-last; cut the scope label from `AI-GATE-TEST` to `AI`; the single scheduler
-(Windows Task Scheduler) runs only the gate.
+**Phase 2F — retire the old pollers.** ✅ **DONE.** Disabled + removed the WSL hermes
+`*-tick` timers/services (kept `hermes-gateway.service`) and unregistered the disabled
+`MaxAgency-ClaudeCodeRoutine` Windows task; deleted the legacy poller files from the repo
+(`claude-code-routine/`, tick `.service`s, `orchestrator-mechanics.sh`, `poll-prompts/`,
+`cron-jobs.md`; slimmed `deploy.sh`); cut the gate's default scope label to **`AI`**;
+registered the single Windows Scheduled Task `MaxAgencyGate` via
+`scripts/register-gate-task.ps1` (verified clean no-op against the live repo). Fail-safe
+fixes: `TemporaryDirectory(ignore_cleanup_errors=True)` + per-issue try/except in the loop.
+**Next: Phase 3.**
 
 **Phase 3 — one-command onboarding.** Collapse setup into `setup.ps1 -Repo owner/repo`
 (creates labels incl. `AI`, writes `PROJECT_REPO`, registers the one gate task with a

@@ -192,6 +192,17 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     numbers), writes an in-flight `expanding` marker before any create (idempotent), then
     marks the kickoff `expanded` and closes it. The full new-idea → merge chain now connects.
   - **2F** decommission old pollers; cut scope label to `AI`; move single scheduler to Windows.
+    ✅ **DONE.** Disabled + removed the WSL hermes *tick* timers/services (kept
+    `hermes-gateway.service` — the coder harness needs it) and unregistered the disabled
+    Claude Code routine Windows task; deleted the legacy poller files from the repo
+    (`claude-code-routine/`, the tick `.service`s, `orchestrator-mechanics.sh`,
+    `poll-prompts/`, `cron-jobs.md`) and slimmed `deploy.sh` to sync only the coder profile;
+    flipped the gate's default `--scope-label` to **`AI`**; registered the gate as the single
+    Windows Scheduled Task (`scripts/register-gate-task.ps1` → `MaxAgencyGate`, 5-min, verified
+    a clean no-op against the live repo). Two fail-safe bugs fixed live: neutral-cwd
+    `TemporaryDirectory(ignore_cleanup_errors=True)` (wsl left the dir busy on Windows → an
+    `unexpected` crash) and per-issue try/except in the main loop (one bad issue no longer
+    aborts the tick). **Old code kept in git history (reversible).**
 - **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1` that **implements
   the `SETUP.md` checklist** (created/maintained incrementally from Phase 2C on — setup
   requirements are captured the moment each phase surfaces them, not reconstructed here).

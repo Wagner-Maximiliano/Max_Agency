@@ -4,7 +4,14 @@ The gate is the single deterministic entry point that replaces the old polling d
 See the roadmap (`Simplification & Reliability Roadmap v3`) for the full design. This
 directory is being built **one phase at a time, beside the old system**.
 
-## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅
+## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅ + 2F ✅ (next: Phase 3 onboarding)
+
+**2F — cutover:** the old polling system is **retired**. The WSL hermes tick timers and the
+Claude Code routine are gone; the gate is the single scheduled job, registered as a Windows
+Scheduled Task via `scripts/register-gate-task.ps1` (`MaxAgencyGate`). The production scope
+label is now **`AI`** (default). The gate is safe to schedule: an empty `AI` board exits at
+zero cost, and `AI` is the per-issue opt-in + kill-switch. `hermes-gateway.service` (the core
+hermes daemon the coder harness needs) and `hermes-config/profiles/coder/` are kept.
 
 **2A — dry-run (read-only):** reads scoped issues, classifies via the state-machine table,
 prints the intended action (unknown/conflicting → `unknown-state`, no action; one corrupt

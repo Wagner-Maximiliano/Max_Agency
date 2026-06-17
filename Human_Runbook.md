@@ -1,5 +1,14 @@
 # Human Runbook — Max Agency
 
+> **⚠ RETIRED FLOW — read before following any step below.** As of **Phase 2F** the polling
+> system this runbook describes (per-model `assigned:*` self-selection labels, the WSL hermes
+> *tick* timers, the Claude Code 5-min routine, `orchestrator-mechanics.sh`) has been
+> **decommissioned**. The current system is **the gate** — one deterministic script run by a
+> single Windows Scheduled Task; the human interface is one label, **`AI`**. See
+> **[`gate/README.md`](gate/README.md)** and **[`docs/GATE_ROADMAP.md`](docs/GATE_ROADMAP.md)**.
+> The steps below remain only as historical reference until this runbook is rewritten in
+> Phase 3 ("install once · start/adopt a project · file work · troubleshoot").
+
 > **New here?** Open `max-agency-flow-diagram(Production).html` in a browser — an illustrated, plain-language walkthrough of how the system works and how to install it. This runbook is the precise step-by-step.
 
 ---

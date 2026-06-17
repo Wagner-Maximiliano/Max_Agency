@@ -142,3 +142,27 @@ def test_deterministic_only_does_not_triage(monkeypatch, tmp_path):
                       "--mode", "deterministic-only"]) == gate.EXIT_OK
     assert called["llm"] is False
     assert rec.ops == []
+
+
+def test_one_issue_error_does_not_halt_the_board(monkeypatch, tmp_path):
+    """An unexpected error on one issue is logged and the rest still process (fail-safe)."""
+    issues = [_scope_only_issue(40, "first", "x"), _scope_only_issue(41, "second", "y")]
+    monkeypatch.setattr(gate, "gh_json", _fake_gh(issues))
+    rec = _RecordingWriter()
+    monkeypatch.setattr(executor, "GitHubWriter", lambda *a, **k: rec)
+
+    def _llm(cmd, timeout_s, input_text="", cwd=None):
+        if "first" in input_text:           # blow up only on the first issue
+            raise RuntimeError("boom (e.g. tempdir cleanup)")
+        return {"returncode": 0, "timed_out": False,
+                "stdout": "ROLE_CODER\nok", "stderr": ""}
+
+    monkeypatch.setattr(harness, "run_llm", _llm)
+
+    rc = gate.main(["--repo", "o/r", "--runtime-dir", str(tmp_path), "--mode", "dispatch-enabled"])
+    assert rc == gate.EXIT_OK                 # tick did NOT abort with EXIT_UNEXPECTED
+    events = [json.loads(l) for l in
+              next((tmp_path / "logs" / "gate").glob("*.jsonl")).read_text().splitlines()]
+    assert any(e["event"] == "issue-error" and e["issue"] == 40 for e in events)
+    # the second issue was still triaged despite the first one erroring
+    assert any(o["op"] == "edit_labels" and o["issue"] == 41 for o in rec.ops)

@@ -97,11 +97,19 @@ gh label list --repo OWNER/REPO --json name --jq '[.labels[].name]'
 
 ## 5. Scheduler & cutover  *(production — 2F/3)*
 
-- [ ] **Windows Task Scheduler** task running the gate on a cadence (the *only* scheduled
-      job). **2F.** `[auto]`
-- [ ] **Cut scope label** `AI-GATE-TEST` → `AI` once old pollers are retired. **2F.** `[auto]`
-- [ ] **Disable the old pollers** (Hermes coder timer/self-poll; Claude Code 5-min routine).
-      **2F.** `[manual]`/`[auto]`
+- [x] **Windows Task Scheduler** task running the gate on a cadence (the *only* scheduled
+      job). Register with `scripts/register-gate-task.ps1 -Repo owner/repo` (task name
+      `MaxAgencyGate`; default dispatch-enabled, 5-min, scope `AI`). Conservative options:
+      `-Mode deterministic-only` or `-NoAutoMerge`. Disable/remove:
+      `Disable-ScheduledTask`/`Unregister-ScheduledTask -TaskName MaxAgencyGate`. **2F.** `[auto]`
+- [x] **Cut scope label** `AI-GATE-TEST` → `AI` — done: the gate's `--scope-label` now
+      defaults to `AI`. The target repo needs the `AI` label (§3). **2F.** `[auto]`
+- [x] **Disable the old pollers** — done (Phase 2F): WSL `systemctl --user disable --now`
+      the `hermes-*-tick` timers + removed their unit files (kept `hermes-gateway.service`);
+      unregistered the Windows `MaxAgency-ClaudeCodeRoutine` task; deleted the legacy poller
+      files from the repo. Verify no pollers remain:
+      `wsl -e bash -lc "systemctl --user list-timers --all | grep -i hermes"` (none) and
+      `Get-ScheduledTask | ? TaskName -match MaxAgency` (only `MaxAgencyGate`). **2F.** `[manual]`/`[auto]`
 
 ## 6. Known environment gotchas (not blockers, but document so installs don't trip on them)
 

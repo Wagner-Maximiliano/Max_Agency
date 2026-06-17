@@ -2,7 +2,7 @@
 """Max Agency gate — runner (Phases 2A dry-run · 2B deterministic · 2C triage).
 
 The core loop:
-  1. Read open issues with the scope label (default AI-GATE-TEST)
+  1. Read open issues with the scope label (default AI; migration testing used AI-GATE-TEST)
   2. Classify each using the state-machine table (classifier.py)
   3. Print the intended action (unknown/conflicting -> "unknown-state", no action)
   4. Write a structured log to runtime/logs/gate/<run_id>.jsonl
@@ -302,7 +302,9 @@ def release_lock(lock_path: Path, run_id: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Max Agency gate (Phase 2A dry-run)")
     ap.add_argument("--repo", default=os.environ.get("PROJECT_REPO"), help="owner/repo")
-    ap.add_argument("--scope-label", default="AI-GATE-TEST")
+    ap.add_argument("--scope-label", default="AI",
+                    help="the human opt-in/kill-switch label that scopes the gate's work "
+                         "(production: AI, from Phase 2F; migration testing used AI-GATE-TEST)")
     ap.add_argument("--mode", choices=["dry-run", "deterministic-only", "dispatch-enabled"],
                     default="dry-run",
                     help="dry-run prints only; deterministic-only also executes non-LLM "
@@ -387,52 +389,58 @@ def main(argv: list[str] | None = None) -> int:
         # run is long and synchronous; fanning out would serialize 30-min builds per tick.
         coder_dispatched = False
         for issue in issues:
-            ctx = build_context(issue, pr_map, closed_numbers, args.stuck_min)
-            decision = classify(ctx)
-            counts[decision.detected_state] = counts.get(decision.detected_state, 0) + 1
-            labels_str = "+".join(sorted(issue_label_names(issue)))
-            print(f"#{decision.number} · {labels_str} · {decision.detected_state} · "
-                  f"{decision.intended_action} · {decision.reason}")
-            log("decision", issue=decision.number, labels=sorted(issue_label_names(issue)),
-                detected_state=decision.detected_state, intended_action=decision.intended_action,
-                reason=decision.reason, llm=decision.llm)
+            # Per-issue isolation: any unexpected error on one issue is logged and the board
+            # keeps processing the rest (fail-safe — one bad issue never halts the tick).
+            try:
+                ctx = build_context(issue, pr_map, closed_numbers, args.stuck_min)
+                decision = classify(ctx)
+                counts[decision.detected_state] = counts.get(decision.detected_state, 0) + 1
+                labels_str = "+".join(sorted(issue_label_names(issue)))
+                print(f"#{decision.number} · {labels_str} · {decision.detected_state} · "
+                      f"{decision.intended_action} · {decision.reason}")
+                log("decision", issue=decision.number, labels=sorted(issue_label_names(issue)),
+                    detected_state=decision.detected_state, intended_action=decision.intended_action,
+                    reason=decision.reason, llm=decision.llm)
 
-            if writer is not None:
-                ops = executor.plan_actions(decision, ctx, run_id, args.scope_label)
-                for op in ops:
-                    try:
-                        writer.apply(op)
-                        mutations += 1
-                        log("mutation", issue=decision.number, op=op["op"])
-                    except Exception as e:  # one bad write must not halt the board
-                        log("mutation-error", issue=decision.number, op=op["op"], detail=repr(e))
+                if writer is not None:
+                    ops = executor.plan_actions(decision, ctx, run_id, args.scope_label)
+                    for op in ops:
+                        try:
+                            writer.apply(op)
+                            mutations += 1
+                            log("mutation", issue=decision.number, op=op["op"])
+                        except Exception as e:  # one bad write must not halt the board
+                            log("mutation-error", issue=decision.number, op=op["op"], detail=repr(e))
 
-                # Phase 2C/2D LLM-dispatch actions (only in dispatch-enabled mode). Each is
-                # fail-safe: a hung/failed harness is a logged no-op, retried next tick.
-                if args.mode == "dispatch-enabled":
-                    act = decision.intended_action
-                    if act == "would-triage":
-                        mutations += dispatch_triage(writer, issue, decision, args, log)
-                    elif act == "would-expand-kickoff":
-                        mutations += dispatch_expand(writer, issue, ctx, decision,
-                                                     run_id, args, log)
-                    elif act == "would-invoke-architect":
-                        mutations += dispatch_architect(writer, issue, ctx, decision,
-                                                        run_id, args, log)
-                    elif act == "would-invoke-cto":
-                        mutations += dispatch_cto(writer, issue, ctx, decision,
-                                                  run_id, args, log, pr_map)
-                    elif act == "would-recover" and ctx.attempt >= args.max_attempts:
-                        # Cheap (label + comment), not a coder run — never budget-limited.
-                        mutations += escalate_coder(writer, ctx, decision, run_id, args, log)
-                    elif act in ("would-dispatch-coder", "would-recover"):
-                        if coder_dispatched:
-                            log("coder-deferred-this-tick", issue=decision.number, action=act)
-                        else:
-                            from_label = "ready" if act == "would-dispatch-coder" else "in-progress"
-                            mutations += dispatch_coder(writer, ctx, decision, run_id,
-                                                        args, log, from_label)
-                            coder_dispatched = True
+                    # Phase 2C–2E LLM-dispatch actions (only in dispatch-enabled mode). Each is
+                    # fail-safe: a hung/failed harness is a logged no-op, retried next tick.
+                    if args.mode == "dispatch-enabled":
+                        act = decision.intended_action
+                        if act == "would-triage":
+                            mutations += dispatch_triage(writer, issue, decision, args, log)
+                        elif act == "would-expand-kickoff":
+                            mutations += dispatch_expand(writer, issue, ctx, decision,
+                                                         run_id, args, log)
+                        elif act == "would-invoke-architect":
+                            mutations += dispatch_architect(writer, issue, ctx, decision,
+                                                            run_id, args, log)
+                        elif act == "would-invoke-cto":
+                            mutations += dispatch_cto(writer, issue, ctx, decision,
+                                                      run_id, args, log, pr_map)
+                        elif act == "would-recover" and ctx.attempt >= args.max_attempts:
+                            # Cheap (label + comment), not a coder run — never budget-limited.
+                            mutations += escalate_coder(writer, ctx, decision, run_id, args, log)
+                        elif act in ("would-dispatch-coder", "would-recover"):
+                            if coder_dispatched:
+                                log("coder-deferred-this-tick", issue=decision.number, action=act)
+                            else:
+                                from_label = "ready" if act == "would-dispatch-coder" else "in-progress"
+                                mutations += dispatch_coder(writer, ctx, decision, run_id,
+                                                            args, log, from_label)
+                                coder_dispatched = True
+            except Exception as e:  # fail-safe: isolate this issue, keep the board moving
+                log("issue-error", issue=issue.get("number"), detail=repr(e))
+                print(f"ISSUE_FAIL #{issue.get('number')}: {e!r}", file=sys.stderr)
 
         if args.audit_all_open:
             audit_ignored(args, log)
@@ -535,7 +543,7 @@ def dispatch_coder(writer, ctx, decision, run_id, args, log, from_label) -> int:
     log("coder-dispatch", issue=n, attempt=attempt, model=model, branch=branch,
         timeout_s=args.coder_timeout)
     cmd = harness.build_coder_command(model, args.repo, n, attempt)
-    with tempfile.TemporaryDirectory(prefix="maxagency-coder-") as neutral_cwd:
+    with tempfile.TemporaryDirectory(prefix="maxagency-coder-", ignore_cleanup_errors=True) as neutral_cwd:
         result = harness.run_llm(cmd, args.coder_timeout, cwd=neutral_cwd)
 
     if result["timed_out"]:
@@ -573,7 +581,7 @@ def dispatch_expand(writer, issue, ctx, decision, run_id, args, log) -> int:
         return 0
 
     cmd = harness.build_expand_command(args.triage_model)
-    with tempfile.TemporaryDirectory(prefix="maxagency-expand-") as neutral_cwd:
+    with tempfile.TemporaryDirectory(prefix="maxagency-expand-", ignore_cleanup_errors=True) as neutral_cwd:
         result = harness.run_llm(cmd, args.llm_timeout, input_text=plan_md, cwd=neutral_cwd)
     if result["timed_out"]:
         log("expand-timeout", issue=n, timeout_s=args.llm_timeout)
@@ -639,7 +647,7 @@ def dispatch_architect(writer, issue, ctx, decision, run_id, args, log) -> int:
     cmd = harness.build_architect_command(args.architect_model)
     stdin = harness.issue_to_architect_stdin(
         issue.get("title", "") or "", issue.get("body", "") or "", feedback)
-    with tempfile.TemporaryDirectory(prefix="maxagency-arch-") as neutral_cwd:
+    with tempfile.TemporaryDirectory(prefix="maxagency-arch-", ignore_cleanup_errors=True) as neutral_cwd:
         result = harness.run_llm(cmd, args.claude_timeout, input_text=stdin, cwd=neutral_cwd)
 
     if result["timed_out"]:
@@ -684,7 +692,7 @@ def dispatch_cto(writer, issue, ctx, decision, run_id, args, log, pr_map) -> int
         issue.get("title", "") or "", issue.get("body", "") or "",
         meta.get("title", "") or "", meta.get("body", "") or "", diff)
     cmd = harness.build_cto_command(args.cto_model)
-    with tempfile.TemporaryDirectory(prefix="maxagency-cto-") as neutral_cwd:
+    with tempfile.TemporaryDirectory(prefix="maxagency-cto-", ignore_cleanup_errors=True) as neutral_cwd:
         result = harness.run_llm(cmd, args.claude_timeout, input_text=stdin, cwd=neutral_cwd)
 
     if result["timed_out"]:
