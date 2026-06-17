@@ -27,6 +27,9 @@ from classifier import Decision, IssueContext
 
 MARKER_TOKEN = "max-agency-dispatch"
 
+# Suppress the child console window on Windows (silent background gate); 0 on POSIX.
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # Actions Phase 2B is allowed to execute. Anything else is deferred (no ops).
 DETERMINISTIC_ACTIONS = {
     "would-promote-ready",
@@ -317,7 +320,8 @@ class GitHubWriter:
         self.timeout = timeout
 
     def _default_runner(self, args: list[str]) -> str:
-        out = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=self.timeout)
+        out = subprocess.run(["gh", *args], capture_output=True, text=True,
+                             timeout=self.timeout, creationflags=NO_WINDOW)
         if out.returncode != 0:
             raise RuntimeError((out.stderr or "gh failed").strip())
         return out.stdout

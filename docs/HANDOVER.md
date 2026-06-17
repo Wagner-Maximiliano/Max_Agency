@@ -237,7 +237,14 @@ registered the single Windows Scheduled Task `MaxAgencyGate` via
 fixes: `TemporaryDirectory(ignore_cleanup_errors=True)` + per-issue try/except in the loop.
 **Next: Phase 3.**
 
-**Phase 3 — one-command onboarding.** Collapse setup into `setup.ps1 -Repo owner/repo`
+**Phase 3 — one-command onboarding.** ⏳ **v1.1 STARTED.** `scripts/setup.ps1 -Repo owner/repo`
+already verifies the vendor CLIs, creates the full label set (idempotent), and registers the
+single **hidden** gate task (`pythonw.exe` + `CREATE_NO_WINDOW` on child processes → no console
+window). Used live to onboard the book repo `Surviving_The_AI_World` (with `-NoAutoMerge`) for a
+soak test. **Still TODO for v1.x:** write `PROJECT_REPO` + a least-privilege token, reconcile/
+replace the stale `scripts/setup-project.ps1` (old `assigned:*`/`phase:*` installer), and rewrite
+`Human_Runbook.md` (currently banner-flagged as the retired flow). Original Phase 3 intent:
+Collapse setup into `setup.ps1 -Repo owner/repo`
 (creates labels incl. `AI`, writes `PROJECT_REPO`, registers the one gate task with a
 least-privilege token, verifies vendor CLIs authed). Optional issue template auto-applies
 `AI`. Trim `Human_Runbook.md` to: install once · start/adopt a project · file work ·

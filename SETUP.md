@@ -6,10 +6,19 @@ moment any phase surfaces a new prerequisite, it is appended here — so require
 in version control from the instant they're discovered, never in one machine's state or a
 developer's memory.
 
-Phase 3's one-command installer (`setup.ps1 -Repo owner/repo`) will **implement this
-checklist** — it does not invent setup, it automates the already-validated items below.
-Until then, this is the manual checklist a human follows to stand up Max Agency on a fresh
-machine.
+**Onboard a repo in one command (v1.1):**
+```powershell
+pwsh scripts/setup.ps1 -Repo owner/repo            # labels + verify CLIs + register the gate task
+pwsh scripts/setup.ps1 -Repo owner/repo -NoAutoMerge   # first run on a LIVE repo (CTO approves, human merges)
+pwsh scripts/setup.ps1 -Repo owner/repo -NoTask        # labels only, don't touch the scheduler
+```
+`setup.ps1` **implements this checklist** for a target repo: it verifies the vendor CLIs,
+creates the full label set (§3, idempotent), and registers the gate as a single **hidden**
+Windows Scheduled Task (`MaxAgencyGate`, runs via `pythonw.exe` so no console window appears;
+the gate's child `gh`/`codex`/`wsl`/`claude` calls use `CREATE_NO_WINDOW`). It does not invent
+setup — it automates the already-validated items below. (v1.1 covers labels + CLI check +
+scheduler; it does not yet write `PROJECT_REPO`/least-priv token or reconcile the stale
+`scripts/setup-project.ps1` — those remain Phase 3.)
 
 > **Maintenance rule (part of the per-phase build loop):** when a phase surfaces an
 > install/config/repo/credential prerequisite, add it here in the same change — with which

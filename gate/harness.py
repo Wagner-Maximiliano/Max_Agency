@@ -45,6 +45,9 @@ TRIAGE_INSTRUCTION = (
 DEFAULT_TRIAGE_MODEL = os.environ.get("GATE_TRIAGE_MODEL", "gpt-5.4-mini")
 DEFAULT_LLM_TIMEOUT_S = 120
 
+# Suppress the child console window on Windows (silent background gate); 0 on POSIX.
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # Kickoff expansion: the orchestrator (same model/vendor as triage) turns an approved PLAN
 # into a small set of concrete coder task issues. Read-only generation; the gate creates
 # the issues. Output is a strict JSON array so the gate can map task deps to real numbers.
@@ -334,6 +337,7 @@ def run_llm(cmd: list[str], timeout_s: int, input_text: str = "",
         out = subprocess.run(
             cmd, input=input_text, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=timeout_s, cwd=cwd,
+            creationflags=NO_WINDOW,
         )
     except subprocess.TimeoutExpired as e:
         return {"returncode": None, "timed_out": True,

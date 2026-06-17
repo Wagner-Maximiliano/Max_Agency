@@ -45,6 +45,10 @@ EXIT_OK = 0
 EXIT_AUTH = 2
 EXIT_UNEXPECTED = 3
 
+# On Windows, suppress the console window for child processes (gh/codex/wsl/claude) so the
+# scheduled gate runs silently in the background. No-op (0) on POSIX.
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
@@ -62,7 +66,8 @@ class GhError(Exception):
 def gh_json(args: list[str]) -> object:
     """Run a read-only `gh` command and parse JSON stdout. Raises GhError on failure."""
     try:
-        out = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=60)
+        out = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=60,
+                             creationflags=NO_WINDOW)
     except FileNotFoundError as e:
         raise GhError("gh CLI not found on PATH") from e
     except subprocess.TimeoutExpired as e:
@@ -79,7 +84,8 @@ def gh_text(args: list[str]) -> str:
     """Run a read-only `gh` command and return raw stdout (e.g. `gh pr diff`)."""
     try:
         out = subprocess.run(["gh", *args], capture_output=True, text=True,
-                             encoding="utf-8", errors="replace", timeout=60)
+                             encoding="utf-8", errors="replace", timeout=60,
+                             creationflags=NO_WINDOW)
     except FileNotFoundError as e:
         raise GhError("gh CLI not found on PATH") from e
     except subprocess.TimeoutExpired as e:
