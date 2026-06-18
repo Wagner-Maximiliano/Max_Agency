@@ -346,6 +346,37 @@ def build_coder_command(model: str, repo: str, issue: int, attempt: int) -> list
     return ["wsl.exe", "-e", "bash", "-lc", full_cmd]
 
 
+def coder_smoke_prompt(repo: str, branch: str, fname: str) -> str:
+    """The self-contained throwaway task for the coder smoke test (BUG-3). Pure.
+
+    A plain ping (`reply READY`) proves the model + auth respond but NOT that the model
+    actually USES hermes's file/git tools — a model can answer in text, hermes exits 0, and
+    no PR is ever opened (seen live on deepseek-v4-flash). This task forces the full agentic
+    round-trip so the caller can verify a real branch + PR landed."""
+    return (
+        f"This is a connectivity smoke test for the Max Agency coder. In the GitHub "
+        f"repository {repo}: create a new git branch named exactly '{branch}', add a new "
+        f"file named '{fname}' containing the single line 'Max Agency coder smoke test "
+        f"-- safe to delete.', commit it, push the branch to origin, and open a DRAFT pull "
+        f"request from '{branch}' whose title starts with '[AI-smoke]'. Use the gh CLI and "
+        f"git; do not modify any other file. This verifies you can use your file and git "
+        f"tools end to end."
+    )
+
+
+def build_coder_smoke_command(model: str, repo: str, branch: str, fname: str) -> list[str]:
+    """wsl.exe -> hermes coder profile running the smoke task (BUG-3). Pure. Same exec shape
+    as build_coder_command (env-source prefix, --yolo --max-turns 30); only the prompt
+    differs (a throwaway branch/file/PR instead of a real issue)."""
+    prompt = coder_smoke_prompt(repo, branch, fname)
+    hermes_cmd = (
+        f"hermes -p coder chat -q {_shquote(prompt)} -m {_shquote(model)} -Q "
+        "--accept-hooks --yolo --max-turns 30"
+    )
+    full_cmd = f"set -a; source ~/.hermes/.env; set +a; {hermes_cmd}"
+    return ["wsl.exe", "-e", "bash", "-lc", full_cmd]
+
+
 def _runnable_argv(cmd: list[str]) -> list[str]:
     """Resolve cmd[0] to something subprocess can exec directly on this platform.
 
