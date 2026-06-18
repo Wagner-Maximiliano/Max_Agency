@@ -13,7 +13,9 @@ import gate
 import harness
 
 
-def _fake_gh(issues, prs=None, closed=None):
+def _fake_gh(issues, prs=None, closed=None, compare=None):
+    """compare: ('missing'|None) → branch 404 (re-dispatch); a dict → an existing branch
+    (e.g. {'ahead_by': 3}). Default = missing, so the legacy recovery tests re-dispatch."""
     prs, closed = prs or [], closed or []
 
     def _gh(args):
@@ -25,6 +27,12 @@ def _fake_gh(issues, prs=None, closed=None):
             return [{"number": i["number"], "labels": i["labels"]} for i in issues]
         if args[:2] == ["pr", "list"]:
             return prs
+        if args[:2] == ["repo", "view"]:           # default-branch lookup (BUG-4 Lever 2)
+            return {"defaultBranchRef": {"name": "main"}}
+        if args[:1] == ["api"] and "/compare/" in (args[1] if len(args) > 1 else ""):
+            if compare in (None, "missing"):
+                raise gate.GhError("Not Found (HTTP 404)")
+            return compare
         return []
     return _gh
 
@@ -55,8 +63,8 @@ def _events(tmp_path):
     return [json.loads(l) for l in logs[0].read_text().splitlines()]
 
 
-def _wire(monkeypatch, issues, run_llm_result, writer=None):
-    monkeypatch.setattr(gate, "gh_json", _fake_gh(issues))
+def _wire(monkeypatch, issues, run_llm_result, writer=None, compare=None):
+    monkeypatch.setattr(gate, "gh_json", _fake_gh(issues, compare=compare))
     rec = writer or _RecordingWriter()
     monkeypatch.setattr(executor, "GitHubWriter", lambda *a, **k: rec)
     calls = {"n": 0, "cmds": []}
@@ -190,6 +198,99 @@ def test_recovery_escalates_at_cap(monkeypatch, tmp_path):
     assert el["add"] == ["needs-human"] and el["remove"] == ["in-progress"]
     assert any(o["op"] == "comment" for o in rec.ops)
     assert any(e["event"] == "coder-escalate" for e in _events(tmp_path))
+
+
+# ── BUG-4 Lever 2: gate opens the PR for an already-pushed branch ──────────────
+def test_lever1_prompt_makes_pr_the_final_mandatory_step():
+    p = harness.coder_prompt("o/r", 7, 2)
+    assert "Work GitHub issue #7" in p                 # opening kept (transcript/test contract)
+    assert "gh pr create" in p and "[AI-7]" in p and "Closes #7" in p
+    assert "NOT complete until" in p                   # hard stop condition
+    assert "Pushing the branch is NOT enough" in p
+
+
+def test_plan_open_pr_ops_follows_convention():
+    ops = executor.plan_open_pr_ops(61, 2, "do a thing", "max-agency/issue-61/attempt-2",
+                                    "main", "rid", "c1", ts="2026-06-18T00:00:00Z")
+    assert ops[0] == {"op": "create_pr", "issue": 61, "head": "max-agency/issue-61/attempt-2",
+                      "base": "main", "title": "[AI-61] do a thing",
+                      "body": ops[0]["body"]}
+    assert "Closes #61" in ops[0]["body"]
+    assert ops[1]["op"] == "upsert_marker" and "status: pr-open" in ops[1]["body"]
+    assert "attempt: 2" in ops[1]["body"]
+
+
+def test_writer_create_pr_argv(monkeypatch):
+    seen = {}
+    w = executor.GitHubWriter("o/r", runner=lambda a: seen.setdefault("a", a) or "url")
+    w.apply({"op": "create_pr", "issue": 61, "head": "br", "base": "main",
+             "title": "[AI-61] x", "body": "Closes #61"})
+    a = seen["a"]
+    assert a[:2] == ["pr", "create"] and "--head" in a and "br" in a
+    assert "--base" in a and "main" in a
+
+
+def test_recovery_opens_pr_for_pushed_branch_no_redispatch(monkeypatch, tmp_path):
+    """A stuck in-progress issue whose attempt branch was pushed (commits ahead) but has no
+    PR → the gate opens the PR itself and does NOT re-dispatch (no orphaned branch)."""
+    issues = [_stale_in_progress(61, attempt=2)]
+    rec, calls = _wire(monkeypatch, issues, _OK, compare={"ahead_by": 3})
+
+    assert _run(tmp_path) == gate.EXIT_OK
+    assert calls["n"] == 0  # NO coder re-dispatch
+    cp = [o for o in rec.ops if o["op"] == "create_pr"]
+    assert len(cp) == 1
+    assert cp[0]["head"] == "max-agency/issue-61/attempt-2" and cp[0]["base"] == "main"
+    ev = {e["event"] for e in _events(tmp_path)}
+    assert "coder-open-pr" in ev
+
+
+def test_recovery_opens_pr_even_at_attempt_cap(monkeypatch, tmp_path):
+    """A good pushed branch must be surfaced as a PR, not escalated to needs-human, even
+    when the attempt cap is reached."""
+    issues = [_stale_in_progress(61, attempt=3)]
+    rec, calls = _wire(monkeypatch, issues, _OK, compare={"ahead_by": 1})
+
+    assert _run(tmp_path, "--max-attempts", "3") == gate.EXIT_OK
+    assert calls["n"] == 0
+    assert any(o["op"] == "create_pr" for o in rec.ops)
+    # NOT escalated
+    assert not any(o["op"] == "edit_labels" and "needs-human" in o.get("add", [])
+                   for o in rec.ops)
+    assert not any(e["event"] == "coder-escalate" for e in _events(tmp_path))
+
+
+def test_recovery_indeterminate_compare_does_not_redispatch(monkeypatch, tmp_path):
+    """If the branch-ahead check errors (not a clean 404), the gate waits — it must not
+    re-dispatch and orphan a possibly-good branch."""
+    issues = [_stale_in_progress(61, attempt=2)]
+
+    def _gh(args):
+        if args[:2] == ["issue", "list"]:
+            if "closed" in args:
+                return []
+            if "--label" in args:
+                return issues
+            return [{"number": i["number"], "labels": i["labels"]} for i in issues]
+        if args[:2] == ["pr", "list"]:
+            return []
+        if args[:2] == ["repo", "view"]:
+            return {"defaultBranchRef": {"name": "main"}}
+        if args[:1] == ["api"] and "/compare/" in args[1]:
+            raise gate.GhError("500 Internal Server Error")  # transient, not 404
+        return []
+
+    monkeypatch.setattr(gate, "gh_json", _gh)
+    rec = _RecordingWriter()
+    monkeypatch.setattr(executor, "GitHubWriter", lambda *a, **k: rec)
+    calls = {"n": 0}
+    monkeypatch.setattr(harness, "run_llm",
+                        lambda *a, **k: calls.update(n=calls["n"] + 1) or dict(_OK))
+
+    assert _run(tmp_path) == gate.EXIT_OK
+    assert calls["n"] == 0  # did NOT re-dispatch
+    assert not any(o["op"] == "create_pr" for o in rec.ops)
+    assert any(e["event"] == "recover-indeterminate" for e in _events(tmp_path))
 
 
 def test_deterministic_only_never_dispatches_coder(monkeypatch, tmp_path):

@@ -311,6 +311,40 @@ def build_pr_map(prs: list[dict]) -> dict:
     return out
 
 
+# ── Coder branch recovery (BUG-4 Lever 2) ────────────────────────────────────
+def default_branch(repo: str, log) -> str | None:
+    """The repo's default branch (base for a gate-opened PR). None on error (skip recovery)."""
+    try:
+        data = gh_json(["repo", "view", repo, "--json", "defaultBranchRef"])
+    except GhError as e:
+        log("recover-base-error", detail=str(e)[:200])
+        return None
+    ref = (data or {}).get("defaultBranchRef") or {}
+    return ref.get("name") or None
+
+
+def branch_ahead(repo: str, base: str, branch: str, log) -> tuple[str, int]:
+    """Compare `base...branch`. Returns one of:
+      ('ahead', n)      branch exists with n commits ahead of base → openable PR
+      ('missing', 0)    branch does not exist (404) → nothing to recover, re-dispatch
+      ('no-commits', 0) branch exists but isn't ahead → nothing to open
+      ('error', 0)      indeterminate (transient/other) → wait, don't risk orphaning a branch
+    """
+    try:
+        data = gh_json(["api", f"repos/{repo}/compare/{base}...{branch}"])
+    except GhError as e:
+        msg = str(e)
+        if re.search(r"(?i)404|not found|no commit found", msg):
+            return ("missing", 0)
+        log("recover-compare-error", branch=branch, detail=msg[:200])
+        return ("error", 0)
+    try:
+        ahead = int((data or {}).get("ahead_by", 0))
+    except (AttributeError, TypeError, ValueError):
+        return ("error", 0)
+    return ("ahead", ahead) if ahead > 0 else ("no-commits", 0)
+
+
 # ── Lock ─────────────────────────────────────────────────────────────────────
 def acquire_lock(lock_path: Path, run_id: str, stale_min: int, log) -> bool:
     """Return True if we hold the lock; False if a fresh lock is held (skip this run)."""
@@ -496,16 +530,29 @@ def main(argv: list[str] | None = None) -> int:
                         elif act == "would-invoke-cto":
                             mutations += dispatch_cto(writer, issue, ctx, decision,
                                                       run_id, args, log, pr_map)
-                        elif act == "would-recover" and ctx.attempt >= args.max_attempts:
-                            # Cheap (label + comment), not a coder run — never budget-limited.
-                            mutations += escalate_coder(writer, ctx, decision, run_id, args, log)
-                        elif act in ("would-dispatch-coder", "would-recover"):
+                        elif act == "would-recover":
+                            # BUG-4 Lever 2: FIRST try to open a PR for an already-pushed good
+                            # branch (the gate owns the mutation) — only if there's nothing to
+                            # surface do we re-dispatch/escalate, so a good branch is never
+                            # orphaned by a fresh attempt.
+                            status, m = recover_coder_pr(writer, ctx, decision, run_id, args, log)
+                            mutations += m
+                            if status == "redispatch":
+                                if ctx.attempt >= args.max_attempts:
+                                    # Cheap (label + comment), not a coder run — never budget-limited.
+                                    mutations += escalate_coder(writer, ctx, decision, run_id, args, log)
+                                elif coder_dispatched:
+                                    log("coder-deferred-this-tick", issue=decision.number, action=act)
+                                else:
+                                    mutations += dispatch_coder(writer, ctx, decision, run_id,
+                                                                args, log, "in-progress")
+                                    coder_dispatched = True
+                        elif act == "would-dispatch-coder":
                             if coder_dispatched:
                                 log("coder-deferred-this-tick", issue=decision.number, action=act)
                             else:
-                                from_label = "ready" if act == "would-dispatch-coder" else "in-progress"
                                 mutations += dispatch_coder(writer, ctx, decision, run_id,
-                                                            args, log, from_label)
+                                                            args, log, "ready")
                                 coder_dispatched = True
             except Exception as e:  # fail-safe: isolate this issue, keep the board moving
                 log("issue-error", issue=issue.get("number"), detail=repr(e))
@@ -809,6 +856,37 @@ def dispatch_cto(writer, issue, ctx, decision, run_id, args, log, pr_map) -> int
                                 auto_merge=args.auto_merge)
     return _apply_ops(writer, n, ops, log,
                       critical_ops=("edit_labels", "merge_pr", "close", "close_pr"))
+
+
+def recover_coder_pr(writer, ctx, decision, run_id, args, log) -> tuple[str, int]:
+    """BUG-4 Lever 2: before re-dispatching a stuck coder issue, check whether the latest
+    attempt's branch was actually pushed (with commits) but left without a PR — and if so,
+    have the GATE open the PR itself (matching every other lane, where the gate owns the
+    GitHub mutation). This MUST run ahead of re-dispatch/escalate so a good pushed branch is
+    never orphaned by a fresh attempt.
+
+    Returns (status, mutations): 'opened' (PR created → don't re-dispatch),
+    'redispatch' (no usable branch → fall through to the existing recovery), or 'skip'
+    (indeterminate → do nothing this tick; never orphan a possibly-good branch).
+    """
+    n = decision.number
+    attempt = ctx.attempt
+    if attempt < 1:
+        return ("redispatch", 0)  # no recorded attempt branch yet → normal dispatch
+    base = default_branch(args.repo, log)
+    if not base:
+        return ("skip", 0)  # can't determine the base safely → don't risk a re-dispatch
+    branch = harness.coder_branch(n, attempt)
+    status, ahead = branch_ahead(args.repo, base, branch, log)
+    if status == "ahead":
+        log("coder-open-pr", issue=n, attempt=attempt, branch=branch, ahead=ahead, base=base)
+        ops = executor.plan_open_pr_ops(n, attempt, ctx.title, branch, base, run_id,
+                                        ctx.marker_comment_id)
+        return ("opened", _apply_ops(writer, n, ops, log, critical_ops=("create_pr",)))
+    if status == "error":
+        log("recover-indeterminate", issue=n, attempt=attempt, branch=branch)
+        return ("skip", 0)
+    return ("redispatch", 0)  # missing / no-commits → nothing to open
 
 
 def escalate_coder(writer, ctx, decision, run_id, args, log) -> int:

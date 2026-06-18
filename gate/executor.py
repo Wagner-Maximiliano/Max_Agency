@@ -304,6 +304,30 @@ def plan_coder_dispatch_ops(issue_number: int, attempt: int, run_id: str, model:
     ]
 
 
+def plan_open_pr_ops(issue_number: int, attempt: int, title: str, branch: str, base: str,
+                     run_id: str, comment_id: str | None, ts: str | None = None) -> list[dict]:
+    """Pure: open the PR for an already-pushed coder branch (BUG-4 Lever 2).
+
+    A weak coder model can push a complete branch but never run `gh pr create`, leaving the
+    work invisible (the gate keys CTO routing off an *open* PR). When the gate detects such a
+    branch (exists + commits ahead + no open PR) it opens the PR ITSELF — the same
+    least-privilege shape as every other lane, where the gate owns the GitHub mutation. The
+    PR follows the coder convention (`[AI-<N>]` title, `Closes #<N>` body). Then a `pr-open`
+    marker, so the issue's attempt count is preserved if the PR is later bounced.
+    """
+    ts = ts or _now_iso()
+    pr_title = f"[AI-{issue_number}] {title}".strip()
+    body = (f"Closes #{issue_number}\n\n_Opened by the Max Agency gate for the pushed branch "
+            f"`{branch}` — the coder completed the work but did not open its own PR._")
+    marker = _coder_marker(issue_number, attempt, run_id, "", "pr-open", ts)
+    return [
+        {"op": "create_pr", "issue": issue_number, "head": branch, "base": base,
+         "title": pr_title, "body": body},
+        {"op": "upsert_marker", "issue": issue_number, "comment_id": comment_id,
+         "body": render_marker(marker)},
+    ]
+
+
 def plan_recovery_escalation_ops(issue_number: int, attempt: int, run_id: str,
                                  comment_id: str | None, ts: str | None = None) -> list[dict]:
     """Pure: retry cap reached — park the issue for a human (Phase 2D)."""
@@ -376,6 +400,12 @@ class GitHubWriter:
                                   "--body", op["body"]])
         elif kind == "upsert_file":
             self._upsert_file(op["path"], op["content"], op["message"], op.get("branch"))
+        elif kind == "create_pr":
+            # Gate-opened PR for an already-pushed coder branch (BUG-4 Lever 2). Errors if a
+            # PR already exists for the head — the caller treats create_pr as critical and
+            # logs/aborts (so a flaky create can't half-advance state), retried next tick.
+            return self._run(["pr", "create", *repo, "--head", op["head"], "--base", op["base"],
+                              "--title", op["title"], "--body", op["body"]])
         elif kind == "merge_pr":
             self._run(["pr", "merge", str(op["pr"]), *repo,
                        f"--{op.get('method', 'squash')}", "--delete-branch"])
