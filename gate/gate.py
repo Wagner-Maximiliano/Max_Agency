@@ -460,9 +460,12 @@ def main(argv: list[str] | None = None) -> int:
 
                 if writer is not None:
                     ops = executor.plan_actions(decision, ctx, run_id, args.scope_label)
+                    created_kickoff = None  # BUG-1: captured to expand it in this same tick
                     for op in ops:
                         try:
-                            writer.apply(op)
+                            out = writer.apply(op)
+                            if op["op"] == "create_issue":
+                                created_kickoff = _issue_number_from_url(out)
                             mutations += 1
                             log("mutation", issue=decision.number, op=op["op"])
                         except Exception as e:  # one bad write must not halt the board
@@ -472,6 +475,16 @@ def main(argv: list[str] | None = None) -> int:
                     # fail-safe: a hung/failed harness is a logged no-op, retried next tick.
                     if args.mode == "dispatch-enabled":
                         act = decision.intended_action
+                        if act == "would-create-kickoff" and created_kickoff is not None:
+                            # BUG-1: expand the just-created kickoff NOW, in the same tick, so
+                            # an approved plan doesn't idle ~5 min waiting for the next scan to
+                            # pick the new kickoff up. The standalone would-expand-kickoff path
+                            # (above) stays the recovery fallback if this in-tick expand fails;
+                            # the `expanding`/`expanded` marker keeps both paths idempotent.
+                            log("kickoff-expand-inline", issue=decision.number,
+                                kickoff=created_kickoff)
+                            mutations += _expand_kickoff(writer, created_kickoff,
+                                                         decision.number, None, run_id, args, log)
                         if act == "would-triage":
                             mutations += dispatch_triage(writer, issue, decision, args, log)
                         elif act == "would-expand-kickoff":
@@ -624,18 +637,29 @@ def dispatch_coder(writer, ctx, decision, run_id, args, log, from_label) -> int:
 
 
 def dispatch_expand(writer, issue, ctx, decision, run_id, args, log) -> int:
+    """Standalone kickoff-expand path: resolve the kickoff's parent from its body, then
+    expand. This is the recovery/fallback route (a kickoff that wasn't expanded in the same
+    tick it was created — e.g. the in-tick expand hung, or a human added the `kickoff` label
+    by hand). The in-tick collapse (BUG-1) calls _expand_kickoff directly."""
+    n = decision.number  # the kickoff issue
+    parent = parse_parent_ref(issue.get("body", "") or "")
+    if parent is None:
+        log("expand-no-parent", issue=n)
+        return 0
+    return _expand_kickoff(writer, n, parent, ctx.marker_comment_id, run_id, args, log)
+
+
+def _expand_kickoff(writer, n: int, parent: int, marker_comment_id, run_id, args, log) -> int:
     """Expand a kickoff issue's approved PLAN into concrete coder task issues (orchestrator).
 
     Read-only generation (codex, PLAN on stdin, neutral cwd); the gate creates the issues,
     resolving each task's deps to the real numbers created earlier in this run. An in-flight
     `expanding` marker is written BEFORE any create, so a crash can't trigger a re-expand
     (duplicate tasks); on success the kickoff is marked `expanded` and closed. Fail-safe.
+
+    `n` is the kickoff issue number; `parent` is the approved-plan issue (its PLAN.md is the
+    spec to decompose). Used both by the standalone path and the in-tick collapse (BUG-1).
     """
-    n = decision.number  # the kickoff issue
-    parent = parse_parent_ref(issue.get("body", "") or "")
-    if parent is None:
-        log("expand-no-parent", issue=n)
-        return 0
     try:
         encoded = gh_text(["api", f"repos/{args.repo}/contents/plans/issue-{parent}/PLAN.md",
                            "--jq", ".content"])
@@ -666,7 +690,7 @@ def dispatch_expand(writer, issue, ctx, decision, run_id, args, log) -> int:
     # In-flight claim FIRST (idempotency). Capture the new marker comment id so the
     # `expanded` finalize edits the same comment in place rather than adding a second.
     mutations = 0
-    marker_cid = ctx.marker_comment_id
+    marker_cid = marker_comment_id
     try:
         out = writer.apply(executor.plan_expand_claim_op(n, run_id, marker_cid))
         marker_cid = marker_cid or _comment_id_from_url(out)
