@@ -61,7 +61,7 @@ def _wire(monkeypatch, issues, run_llm_result, writer=None):
     monkeypatch.setattr(executor, "GitHubWriter", lambda *a, **k: rec)
     calls = {"n": 0, "cmds": []}
 
-    def _fake_llm(cmd, timeout_s, input_text="", cwd=None):
+    def _fake_llm(cmd, timeout_s, input_text="", cwd=None, transcript=None):
         calls["n"] += 1
         calls["cmds"].append(cmd)
         calls.setdefault("cwds", []).append(cwd)

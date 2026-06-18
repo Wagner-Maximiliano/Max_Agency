@@ -55,7 +55,7 @@ def _wire(monkeypatch, issues, prs, cto_stdout, rollup=None, writer=None):
     monkeypatch.setattr(executor, "GitHubWriter", lambda *a, **k: rec)
     seen = {"stdin": None, "cwd": None}
 
-    def _fake_llm(cmd, timeout_s, input_text="", cwd=None):
+    def _fake_llm(cmd, timeout_s, input_text="", cwd=None, transcript=None):
         seen["stdin"], seen["cwd"] = input_text, cwd
         return {"returncode": 0, "timed_out": False, "stdout": cto_stdout, "stderr": ""}
 

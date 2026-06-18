@@ -151,7 +151,7 @@ def test_one_issue_error_does_not_halt_the_board(monkeypatch, tmp_path):
     rec = _RecordingWriter()
     monkeypatch.setattr(executor, "GitHubWriter", lambda *a, **k: rec)
 
-    def _llm(cmd, timeout_s, input_text="", cwd=None):
+    def _llm(cmd, timeout_s, input_text="", cwd=None, transcript=None):
         if "first" in input_text:           # blow up only on the first issue
             raise RuntimeError("boom (e.g. tempdir cleanup)")
         return {"returncode": 0, "timed_out": False,

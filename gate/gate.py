@@ -396,6 +396,11 @@ def main(argv: list[str] | None = None) -> int:
     log_path = runtime / "logs" / "gate" / f"{run_id}.jsonl"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fp = log_path.open("a")
+    # FEAT-1: per-run LLM transcript, co-located with the decision JSONL under one root
+    # (runtime/logs/{gate,transcripts}/). The dir is created lazily on the first LLM call,
+    # so an empty board (no dispatch) writes no transcript file.
+    args._run_id = run_id
+    args.transcript_path = str(runtime / "logs" / "transcripts" / f"{run_id}.txt")
 
     def log(event: str, **kw) -> None:
         log_fp.write(json.dumps({"run_id": run_id, "ts": iso(now()), "event": event, **kw}) + "\n")
@@ -507,6 +512,14 @@ def main(argv: list[str] | None = None) -> int:
         log_fp.close()
 
 
+def _transcript(args, issue_n, role: str, model: str, sent: str) -> dict:
+    """FEAT-1: the transcript descriptor passed to harness.run_llm so the call is logged to
+    runtime/logs/transcripts/<run_id>.txt. `sent` is the human-readable prompt (never argv —
+    the coder argv carries the env-sourcing prefix; run_llm logs only what we pass here)."""
+    return {"path": getattr(args, "transcript_path", None), "run_id": getattr(args, "_run_id", ""),
+            "issue": issue_n, "role": role, "model": model, "sent": sent}
+
+
 def dispatch_triage(writer, issue: dict, decision, args, log) -> int:
     """Invoke the orchestrator to triage one scope-only issue; apply the label deterministically.
 
@@ -516,7 +529,8 @@ def dispatch_triage(writer, issue: dict, decision, args, log) -> int:
     n = decision.number
     cmd = harness.build_triage_command(args.triage_model)
     stdin = harness.issue_to_stdin(issue.get("title", "") or "", issue.get("body", "") or "")
-    result = harness.run_llm(cmd, args.llm_timeout, input_text=stdin)
+    result = harness.run_llm(cmd, args.llm_timeout, input_text=stdin,
+                             transcript=_transcript(args, n, "triage", args.triage_model, stdin))
 
     if result["timed_out"]:
         log("triage-timeout", issue=n, timeout_s=args.llm_timeout)
@@ -594,8 +608,10 @@ def dispatch_coder(writer, ctx, decision, run_id, args, log, from_label) -> int:
     log("coder-dispatch", issue=n, attempt=attempt, model=model, branch=branch,
         timeout_s=args.coder_timeout)
     cmd = harness.build_coder_command(model, args.repo, n, attempt)
+    sent = harness.coder_prompt(args.repo, n, attempt)  # safe-to-log half (no env prefix)
     with tempfile.TemporaryDirectory(prefix="maxagency-coder-", ignore_cleanup_errors=True) as neutral_cwd:
-        result = harness.run_llm(cmd, args.coder_timeout, cwd=neutral_cwd)
+        result = harness.run_llm(cmd, args.coder_timeout, cwd=neutral_cwd,
+                                 transcript=_transcript(args, n, "coder", model, sent))
 
     if result["timed_out"]:
         log("coder-timeout", issue=n, attempt=attempt, timeout_s=args.coder_timeout)
@@ -633,7 +649,8 @@ def dispatch_expand(writer, issue, ctx, decision, run_id, args, log) -> int:
 
     cmd = harness.build_expand_command(args.triage_model)
     with tempfile.TemporaryDirectory(prefix="maxagency-expand-", ignore_cleanup_errors=True) as neutral_cwd:
-        result = harness.run_llm(cmd, args.llm_timeout, input_text=plan_md, cwd=neutral_cwd)
+        result = harness.run_llm(cmd, args.llm_timeout, input_text=plan_md, cwd=neutral_cwd,
+                                 transcript=_transcript(args, n, "expand", args.triage_model, plan_md))
     if result["timed_out"]:
         log("expand-timeout", issue=n, timeout_s=args.llm_timeout)
         return 0
@@ -699,7 +716,8 @@ def dispatch_architect(writer, issue, ctx, decision, run_id, args, log) -> int:
     stdin = harness.issue_to_architect_stdin(
         issue.get("title", "") or "", issue.get("body", "") or "", feedback)
     with tempfile.TemporaryDirectory(prefix="maxagency-arch-", ignore_cleanup_errors=True) as neutral_cwd:
-        result = harness.run_llm(cmd, args.claude_timeout, input_text=stdin, cwd=neutral_cwd)
+        result = harness.run_llm(cmd, args.claude_timeout, input_text=stdin, cwd=neutral_cwd,
+                                 transcript=_transcript(args, n, "architect", args.architect_model, stdin))
 
     if result["timed_out"]:
         log("architect-timeout", issue=n, timeout_s=args.claude_timeout)
@@ -744,7 +762,8 @@ def dispatch_cto(writer, issue, ctx, decision, run_id, args, log, pr_map) -> int
         meta.get("title", "") or "", meta.get("body", "") or "", diff)
     cmd = harness.build_cto_command(args.cto_model)
     with tempfile.TemporaryDirectory(prefix="maxagency-cto-", ignore_cleanup_errors=True) as neutral_cwd:
-        result = harness.run_llm(cmd, args.claude_timeout, input_text=stdin, cwd=neutral_cwd)
+        result = harness.run_llm(cmd, args.claude_timeout, input_text=stdin, cwd=neutral_cwd,
+                                 transcript=_transcript(args, n, "cto", args.cto_model, stdin))
 
     if result["timed_out"]:
         log("cto-timeout", issue=n, timeout_s=args.claude_timeout)

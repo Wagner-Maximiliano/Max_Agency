@@ -55,7 +55,7 @@ def _wire(monkeypatch, issues, llm_result, writer=None):
     monkeypatch.setattr(executor, "GitHubWriter", lambda *a, **k: rec)
     seen = {"stdin": None, "cwd": None, "cmd": None}
 
-    def _fake_llm(cmd, timeout_s, input_text="", cwd=None):
+    def _fake_llm(cmd, timeout_s, input_text="", cwd=None, transcript=None):
         seen["stdin"], seen["cwd"], seen["cmd"] = input_text, cwd, cmd
         return dict(llm_result)
 
