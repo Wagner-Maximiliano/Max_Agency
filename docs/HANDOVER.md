@@ -283,3 +283,45 @@ troubleshoot.
 When validating live, prefix test issue titles with `[GATE-TEST]`, keep them few, and
 **close them when done** so the board stays clean. Prefer a throwaway repo if you have one;
 otherwise `max_agency` is fine (it is the engine, not a polled project).
+
+---
+
+## 10. Soak test — known bugs (address in a future session)
+
+Bugs found during the first live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
+(2026-06-18). Do not touch gate core code without the owner's approval; verify each fix
+with a unit test + live run before closing.
+
+### BUG-1 — Approve→kickoff→expand takes two ticks instead of one
+
+**Symptom:** After the owner posts `APPROVE`, the gate executes the `approve→kickoff` op
+(creates the kickoff issue, flips label to `kickoff`) in tick N. The kickoff issue then
+sits idle until tick N+1 fires the orchestrator to expand it — a needless 5-minute wait.
+
+**Root cause:** The gate fetches the issue list once at tick start. A kickoff issue
+created mid-tick isn't in that list, so it can't be processed until the next scan.
+
+**Fix (one of):** After the main loop finishes, do a second-pass sweep: re-fetch any
+issues created this tick (easy: they're returned by `create_issue`) and process them
+immediately. Alternatively, collapse `approve→kickoff` and `would-expand-kickoff` into
+a single compound action (creates the kickoff *and* calls the orchestrator in one op).
+
+**Files:** `gate/executor.py` (`plan_approve_ops`), `gate/gate.py` (main loop).
+
+---
+
+### BUG-2 — Dispatch marker comment appears blank to users
+
+**Symptom:** When the gate writes or updates a dispatch marker, GitHub shows an empty
+comment. Observed on `Surviving_The_AI_World` issue #60.
+
+**Root cause:** `upsert_marker` creates a comment whose entire body is an HTML comment
+block (`<!-- max-agency-dispatch … -->`). GitHub renders HTML comments as invisible, so
+the comment appears completely blank to any human reading the issue.
+
+**Fix:** Prepend a short visible line to every marker comment body before the HTML block,
+e.g. `_Max Agency gate marker — do not edit._` followed by a blank line. The HTML block
+stays intact for machine parsing; the stub line makes the comment non-blank.
+
+**Files:** `gate/executor.py` (wherever the marker comment body is assembled — search
+`max-agency-dispatch`).
