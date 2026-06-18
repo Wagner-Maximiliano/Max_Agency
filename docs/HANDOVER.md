@@ -349,3 +349,73 @@ during onboarding to gate the coder model before registering the task.
 real PRs) until deepseek/deepseek-v4-flash is validated separately. To change the coder
 model for the soak test book repo, edit `Max_AgencyConfig.md` in
 `Surviving_The_AI_World` and push.
+
+---
+
+## 11. Soak test — proposed enhancements (not yet built)
+
+Enhancements requested during the soak test. **Not bugs** — the system works without
+them. Do not implement without the owner's go-ahead; when building, follow the per-phase
+loop (§5) and update the docs listed under each item.
+
+### FEAT-1 — Full LLM transcript logging (every agent, zero extra tokens)
+
+**Goal:** Persist the exact prompt sent to and raw response received from every LLM call,
+to disk, so failures like BUG-3 (coder exits 0 but opens no PR) can be diagnosed by
+*reading what the model actually said* instead of inferring from side effects.
+
+**Why it's free:** the gate already has both halves in hand at one chokepoint — it
+*builds* the outbound prompt and *reads* the subprocess stdout/stderr. Writing them to a
+file is pure local disk I/O on data already in memory. **No LLM is involved in the
+logging, so it consumes zero tokens.** This applies uniformly to all four agents (triage
+= codex, coder = wsl->hermes, architect + CTO = claude) because they all route through
+the single runner.
+
+**Design (simplest correct approach):**
+- Implement at the **one chokepoint**, `harness.run_llm` — NOT via per-CLI shell
+  redirection (`| tee`). Shell redirection differs across the 3 CLIs and can't cleanly
+  capture the *outbound* prompt; the Python boundary captures both directions for all four
+  agents in one place.
+- For each invocation, append a transcript record: timestamp, `run_id`, issue #, role,
+  model, **SENT** (the prompt/content passed in), **RECEIVED** (raw stdout + stderr + exit
+  code).
+- **Storage path: `logs/transcripts/`** — one file per run (e.g.
+  `logs/transcripts/<run_id>.txt`) so a run's decision JSONL and its LLM conversation sit
+  together. The implementing session must **create the `logs/transcripts/` folder** (e.g.
+  `os.makedirs(..., exist_ok=True)` before the first write, and have `setup.ps1` create it
+  at onboarding). NOTE a path inconsistency to resolve: existing decision logs live under
+  `runtime/logs/gate/`, this asks for `logs/transcripts/` — pick one root or document why
+  they differ.
+- Only write a transcript when an LLM is actually invoked (empty board = no file).
+
+**SECURITY (mandatory):** the coder command string begins with `source ~/.hermes/.env`
+(loads the OpenRouter key). **Never write that raw `full_cmd` to the transcript** — log the
+prompt + model only, never the env-sourcing prefix or any token. Mirror the existing JSONL,
+which already keeps secrets out. Treat the model's *response* as untrusted data too (it can
+contain anything) — it's fine on disk, just never executed.
+
+### FEAT-2 — Daily log-retention cleanup task (via setup.ps1)
+
+**Goal:** Stop `logs/` (transcripts especially — full prompts + responses every tick) from
+growing without bound.
+
+**Design:**
+- `setup.ps1` registers a **second** Windows Scheduled Task that runs **daily** and deletes
+  any file under `logs/` (and/or `runtime/logs/`) **older than 7 days**. Keep it hidden /
+  windowless, same style as the gate task registration.
+- Idempotent (re-running `setup.ps1` updates, doesn't duplicate the task). Give it a clear
+  name, e.g. `MaxAgencyLogCleanup`.
+- The deletion itself is a tiny PowerShell one-liner
+  (`Get-ChildItem -Recurse | Where LastWriteTime -lt (Get-Date).AddDays(-7) | Remove-Item`)
+  — keep the retention window a parameter (default 7) so it's tunable.
+
+### Doc updates required when FEAT-1/FEAT-2 land (deliverables, do with the code)
+
+- **`.gitignore`** — already covers it: both `logs/` and `runtime/` are ignored, so
+  `logs/transcripts/` is never committed. **No change needed** (verified 2026-06-18); just
+  confirm it still holds when adding the folder.
+- **`SETUP.md`** — add the `logs/transcripts/` folder + the `MaxAgencyLogCleanup` task to
+  the checklist (which phase, `[auto]` via setup.ps1, a verify command).
+- **`Human_Runbook.md`** — document where transcripts live and the 7-day retention, in the
+  troubleshooting section (note: this file is still the banner-flagged retired flow pending
+  the Phase 3 rewrite — fold this in during that rewrite rather than extending the old text).
