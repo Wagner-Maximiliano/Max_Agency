@@ -325,3 +325,27 @@ stays intact for machine parsing; the stub line makes the comment non-blank.
 
 **Files:** `gate/executor.py` (wherever the marker comment body is assembled — search
 `max-agency-dispatch`).
+
+---
+
+### BUG-3 — `check_model` ping does not validate agentic tool use
+
+**Symptom:** `python gate/check_model.py coder --model deepseek/deepseek-v4-flash` returned
+PASS, the gate dispatched the coder, hermes exited 0 in ~2.5 min, but no branch, commit,
+or PR was created. The model responded in text without using hermes's file/git tools.
+Observed on `Surviving_The_AI_World` issue #61 (dispatch `20260618T201516Z-0c63`).
+
+**Root cause:** `check_model` only sends a trivial one-line ping and checks for any
+response — it does not verify that the model issues tool calls in hermes's agentic mode
+(`--yolo --max-turns 30`). A model can pass the ping and still fail the real task silently
+(exit 0 = hermes ran cleanly, not = PR opened).
+
+**Fix:** Extend `check_model coder` to run a minimal end-to-end smoke test: create a
+throwaway branch, commit a single file, open a draft PR, then delete them. Alternatively,
+add a separate `--smoke` flag that does the full round-trip and is used by `setup.ps1`
+during onboarding to gate the coder model before registering the task.
+
+**Workaround:** Stick to `xiaomi/mimo-v2.5` (benchmarked + validated at Phase 0 with
+real PRs) until deepseek/deepseek-v4-flash is validated separately. To change the coder
+model for the soak test book repo, edit `Max_AgencyConfig.md` in
+`Surviving_The_AI_World` and push.
