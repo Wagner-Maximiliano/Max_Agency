@@ -79,8 +79,8 @@ with no manual label-fixing and no babysitting.
   specs → the gate creates coder task issues (no-dep `ready`, dep `backlog` + `Depends-on:`
   resolved to real numbers), `expanding` marker before any create (idempotent), then marks
   the kickoff `expanded` + closes it. The full idea→merge chain now connects end to end.
-- **170 gate unit tests passing** (138 through kickoff-expansion + 32 from the soak-test
-  backlog, §10–§11 below — all shipped 2026-06-18). Phases 2A–2E + kickoff-expansion validated live on a
+- **170 gate unit tests passing** (138 through kickoff-expansion + 32 from the 5 shipped
+  soak-test items — BUG-1/2/3 + FEAT-1/2, §10–§11; BUG-4 is still open). Phases 2A–2E + kickoff-expansion validated live on a
   throwaway repo (test issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
   must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
   caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
@@ -287,14 +287,20 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs ✅ ALL FIXED (2026-06-18)
+## 10. Soak test — known bugs (BUG-1/2/3 ✅ FIXED · BUG-4 ⏳ OPEN)
 
 Bugs found during the first live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
-(2026-06-18). **All three fixed + unit-tested 2026-06-18** (commits `429c940`, `4d0f216`,
+(2026-06-18). **BUG-1/2/3 fixed + unit-tested 2026-06-18** (commits `429c940`, `4d0f216`,
 `ab9903a` on `claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so they
 were shipped on the unit suite (170 tests green), to be exercised by the running soak test.
-The spec for each is kept below as the record. Two design decisions resolved explicitly: see
-BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/` log root).
+**BUG-4 (below) was logged afterward by the soak session and is still OPEN.** The spec for
+each is kept below as the record. Two design decisions resolved explicitly: see BUG-1
+(compound op over second-pass sweep) and FEAT-1 (single `runtime/` log root).
+
+> Note: BUG-4 (coder pushes a branch but never opens the PR) is exactly the failure mode the
+> new **BUG-3 `--smoke` test now detects** — a model that pushes but doesn't `gh pr create`
+> fails the smoke check instead of passing a trivial ping. The durable fix is BUG-4 Lever 2
+> (have the gate open the PR deterministically). Not yet implemented.
 
 ### BUG-1 — Approve→kickoff→expand takes two ticks instead of one ✅ FIXED (`4d0f216`)
 
