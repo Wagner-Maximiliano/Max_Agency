@@ -28,6 +28,7 @@ param(
   [int]$IntervalMinutes = 5,
   [string]$ScopeLabel = "AI",
   [string]$CoderModel,                 # per-repo coder model (else the gate default from gate/models.env)
+  [int]$RetentionDays = 7,             # log-cleanup retention window (MaxAgencyLogCleanup task)
   [switch]$NoTask,
   [string]$RepoRoot
 )
@@ -158,16 +159,23 @@ GATE_CTO_MODEL=opus
   } catch { Warn "could not create Max_AgencyConfig.md: $($_.Exception.Message)" }
 }
 
-# -- 4. Register the single gate scheduled task ----
+# -- 4. Register the scheduled tasks (the gate + the daily log cleanup) ----
 if ($NoTask) {
   Say "Skipping task registration (-NoTask). Run the gate manually with:"
   Write-Host "    python `"$RepoRoot\gate\gate.py`" --repo $Repo --mode $Mode --scope-label $ScopeLabel"
+  Write-Host "    pwsh `"$RepoRoot\scripts\clean-logs.ps1`" -RetentionDays $RetentionDays   # prune old logs"
 } else {
   Say "Registering the gate scheduled task..."
   $reg = Join-Path $RepoRoot "scripts\register-gate-task.ps1"
   $regArgs = @{ Repo = $Repo; Mode = $Mode; IntervalMinutes = $IntervalMinutes; ScopeLabel = $ScopeLabel; RepoRoot = $RepoRoot }
   if ($NoAutoMerge) { $regArgs.NoAutoMerge = $true }
   & $reg @regArgs
+
+  # FEAT-2: a second, daily task that prunes logs/ older than -RetentionDays so the gate's
+  # transcripts + decision logs do not grow without bound. Idempotent (re-run updates in place).
+  Say "Registering the daily log-cleanup task (retention $RetentionDays day(s))..."
+  $regClean = Join-Path $RepoRoot "scripts\register-log-cleanup-task.ps1"
+  & $regClean -RetentionDays $RetentionDays -RepoRoot $RepoRoot
 }
 
 Write-Host ""

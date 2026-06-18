@@ -8,6 +8,15 @@
 > **[`gate/README.md`](gate/README.md)** and **[`docs/GATE_ROADMAP.md`](docs/GATE_ROADMAP.md)**.
 > The steps below remain only as historical reference until this runbook is rewritten in
 > Phase 3 ("install once · start/adopt a project · file work · troubleshoot").
+>
+> **Troubleshooting the gate (current system) — where the logs are.** Each gate run writes a
+> decision log to `runtime/logs/gate/<run_id>.jsonl` and, when it calls an LLM, the full
+> prompt + raw reply to `runtime/logs/transcripts/<run_id>.txt`. If an agent "did nothing"
+> (e.g. the coder ran but opened no PR), read its transcript to see exactly what the model
+> said. Both trees are git-ignored and pruned daily by the `MaxAgencyLogCleanup` task
+> (default **7-day** retention; tune with `setup.ps1 -RetentionDays N`, or prune by hand with
+> `pwsh scripts/clean-logs.ps1 -RetentionDays N`). Transcripts never contain secrets. (This
+> note will be folded into the Phase 3 rewrite below.)
 
 > **New here?** Open `max-agency-flow-diagram(Production).html` in a browser — an illustrated, plain-language walkthrough of how the system works and how to install it. This runbook is the precise step-by-step.
 

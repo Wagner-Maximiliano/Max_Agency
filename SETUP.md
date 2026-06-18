@@ -154,6 +154,13 @@ gh label list --repo OWNER/REPO --json name --jq '[.labels[].name]'
       `MaxAgencyGate`; default dispatch-enabled, 5-min, scope `AI`). Conservative options:
       `-Mode deterministic-only` or `-NoAutoMerge`. Disable/remove:
       `Disable-ScheduledTask`/`Unregister-ScheduledTask -TaskName MaxAgencyGate`. **2F.** `[auto]`
+- [x] **Log-retention cleanup task** `MaxAgencyLogCleanup` — a **second** daily hidden task
+      that deletes files under `runtime\logs\` (decision JSONL + LLM transcripts) and `logs\`
+      older than a retention window (default **7 days**, tunable). `setup.ps1` registers it
+      automatically (`-RetentionDays N`); it delegates to `scripts/register-log-cleanup-task.ps1`
+      → `scripts/clean-logs.ps1`. Idempotent (re-run updates in place). Run the prune by hand:
+      `pwsh scripts/clean-logs.ps1 -RetentionDays 7`. Verify the task:
+      `Get-ScheduledTask -TaskName MaxAgencyLogCleanup`. **FEAT-2.** `[auto]`
 - [x] **Cut scope label** `AI-GATE-TEST` → `AI` — done: the gate's `--scope-label` now
       defaults to `AI`. The target repo needs the `AI` label (§3). **2F.** `[auto]`
 - [x] **Disable the old pollers** — done (Phase 2F): WSL `systemctl --user disable --now`
@@ -180,9 +187,26 @@ gh label list --repo OWNER/REPO --json name --jq '[.labels[].name]'
 - **Codex model availability is account-specific** — verify `gpt-5.4-mini` works on the
   actual account (§2) rather than assuming.
 
+## 7. Observability & logs  *(where a run's output lands)*
+
+Both log trees live under the gate's runtime dir (`--runtime-dir`, default `runtime/`) and
+are **git-ignored** (`.gitignore` covers `runtime/` and `logs/`). Created lazily — an empty
+board writes nothing.
+
+- **Decision log:** `runtime/logs/gate/<run_id>.jsonl` — one correlated JSONL per run (every
+  classify/mutation/dispatch event). Always written. **2A+.**
+- **LLM transcripts:** `runtime/logs/transcripts/<run_id>.txt` — the exact prompt SENT to and
+  raw output RECEIVED from every LLM call that run (triage/coder/expand/architect/CTO), so a
+  silent failure (a model exits 0 but opens no PR) can be diagnosed by reading what it said.
+  Written only when an LLM is actually invoked; **zero extra tokens**. **Secrets never land
+  here** — only the prompt + model are logged (never the coder's `source ~/.hermes/.env`
+  command prefix), and a defensive scrub masks any key/token shapes. **FEAT-1.**
+- **Retention:** the `MaxAgencyLogCleanup` task (§5) prunes both trees daily (default 7 days).
+
 ---
 
-*Surfaced-by log (newest first): §3 `role:cto`-label miss + §2 `claude` headless/tool-less —
+*Surfaced-by log (newest first): §5 log-cleanup task + §7 transcripts — FEAT-1/FEAT-2
+(2026-06-18, soak-test backlog). §3 `role:cto`-label miss + §2 `claude` headless/tool-less —
 Phase 2E (2026-06-16). §2 gh-in-WSL + §6 neutral-cwd safeguard — Phase 2D
 (2026-06-16, after a coder inherited the repo cwd and ran `git checkout` in it). §3 labels +
 stale-installer mismatch — Phase 2C (2026-06-16). §2 codex/model — Phase 0/2C. §2 hermes
