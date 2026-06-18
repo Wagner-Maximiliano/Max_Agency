@@ -204,14 +204,17 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     `TemporaryDirectory(ignore_cleanup_errors=True)` (wsl left the dir busy on Windows → an
     `unexpected` crash) and per-issue try/except in the main loop (one bad issue no longer
     aborts the tick). **Old code kept in git history (reversible).**
-  - **Soak-test hardening** (first live soak on `Surviving_The_AI_World`) ✅ **DONE — 170 unit
-    tests, 2026-06-18.** Three bugs + two features: **BUG-2** visible stub on marker comments
+  - **Soak-test hardening** (first live soak on `Surviving_The_AI_World`) ✅ **DONE — 176 unit
+    tests, 2026-06-18.** Four bugs + two features: **BUG-2** visible stub on marker comments
     (were blank HTML-only); **BUG-1** an approved kickoff is expanded in the same tick it's
     created (compound op, standalone expand kept as the idempotent fallback); **BUG-3**
     `check_model coder --smoke` does a real branch→commit→PR round-trip and verifies the PR
-    landed; **FEAT-1** full LLM transcripts at the single `run_llm` chokepoint
-    (`runtime/logs/transcripts/<run_id>.txt`, zero extra tokens, argv/secrets never logged);
-    **FEAT-2** daily `MaxAgencyLogCleanup` task prunes logs past a retention window (default 7d).
+    landed; **BUG-4** if the coder pushes a good branch but opens no PR, the gate opens it
+    deterministically in the recovery path (ahead of any re-dispatch, so the branch isn't
+    orphaned) — removing the coder's reliance on doing its own GitHub mutation; **FEAT-1** full
+    LLM transcripts at the single `run_llm` chokepoint (`runtime/logs/transcripts/<run_id>.txt`,
+    zero extra tokens, argv/secrets never logged); **FEAT-2** daily `MaxAgencyLogCleanup` task
+    prunes logs past a retention window (default 7d).
 - **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1` that **implements
   the `SETUP.md` checklist** (created/maintained incrementally from Phase 2C on — setup
   requirements are captured the moment each phase surfaces them, not reconstructed here).
@@ -256,8 +259,9 @@ PRs, CI, human board. Cross-vendor review preserved (mimo/GPT build → Claude C
 - **2C–2E:** each LLM invoked only for its state; one invocation per issue; stuck-recovery
   reclaims/retries to cap then `needs-human`; kill mid-dispatch → next tick recovers.
 - **2F:** with old pollers off, a full new-idea→merge cycle completes with no double-dispatch/orphan.
-- **Soak-hardening:** 170 unit tests green; marker comments render non-blank; an approved
-  kickoff expands same-tick; `check_model coder --smoke` fails when no PR is opened; a
-  transcript lands at `runtime/logs/transcripts/<run_id>.txt` with no secrets; `clean-logs.ps1`
-  removes only files past the retention window.
+- **Soak-hardening:** 176 unit tests green; marker comments render non-blank; an approved
+  kickoff expands same-tick; `check_model coder --smoke` fails when no PR is opened; a stuck
+  in-progress issue whose attempt branch is ahead with no PR gets the PR opened by the gate
+  (no re-dispatch); a transcript lands at `runtime/logs/transcripts/<run_id>.txt` with no
+  secrets; `clean-logs.ps1` removes only files past the retention window.
 - **Phase 3:** clean machine → `setup.ps1` → open issue + `AI` → merged PR, no manual label fixing.

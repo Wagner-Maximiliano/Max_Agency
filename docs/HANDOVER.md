@@ -79,8 +79,8 @@ with no manual label-fixing and no babysitting.
   specs → the gate creates coder task issues (no-dep `ready`, dep `backlog` + `Depends-on:`
   resolved to real numbers), `expanding` marker before any create (idempotent), then marks
   the kickoff `expanded` + closes it. The full idea→merge chain now connects end to end.
-- **170 gate unit tests passing** (138 through kickoff-expansion + 32 from the 5 shipped
-  soak-test items — BUG-1/2/3 + FEAT-1/2, §10–§11; BUG-4 is still open). Phases 2A–2E + kickoff-expansion validated live on a
+- **176 gate unit tests passing** (138 through kickoff-expansion + 38 from the soak-test
+  backlog — BUG-1/2/3/4 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
   throwaway repo (test issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
   must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
   caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
@@ -287,20 +287,23 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs (BUG-1/2/3 ✅ FIXED · BUG-4 ⏳ OPEN)
+## 10. Soak test — known bugs (BUG-1/2/3/4 ✅ ALL FIXED)
 
 Bugs found during the first live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
-(2026-06-18). **BUG-1/2/3 fixed + unit-tested 2026-06-18** (commits `429c940`, `4d0f216`,
-`ab9903a` on `claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so they
-were shipped on the unit suite (170 tests green), to be exercised by the running soak test.
-**BUG-4 (below) was logged afterward by the soak session and is still OPEN.** The spec for
-each is kept below as the record. Two design decisions resolved explicitly: see BUG-1
-(compound op over second-pass sweep) and FEAT-1 (single `runtime/` log root).
+(2026-06-18). **All four fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
+BUG-4 `7f4eec5`, on `claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so
+they were shipped on the unit suite (**176 tests green**), to be exercised by the running
+soak test. The spec for each is kept below as the record. Two design decisions resolved
+explicitly: see BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/`
+log root).
 
 > Note: BUG-4 (coder pushes a branch but never opens the PR) is exactly the failure mode the
-> new **BUG-3 `--smoke` test now detects** — a model that pushes but doesn't `gh pr create`
-> fails the smoke check instead of passing a trivial ping. The durable fix is BUG-4 Lever 2
-> (have the gate open the PR deterministically). Not yet implemented.
+> **BUG-3 `--smoke` test detects** — a model that pushes but doesn't `gh pr create` fails the
+> smoke check instead of passing a trivial ping. Now also fixed at the source by BUG-4
+> Lever 2 (the gate opens the PR deterministically), so a weak coder model no longer blocks
+> the pipeline. **Live-validate** against `Surviving_The_AI_World` #61 (known-good `attempt-2`
+> branch, no PR, issue `in-progress`): re-enabling the task should open the PR for that exact
+> branch on the first tick, with no re-dispatch.
 
 ### BUG-1 — Approve→kickoff→expand takes two ticks instead of one ✅ FIXED (`4d0f216`)
 
@@ -378,7 +381,19 @@ model for the soak test book repo, edit `Max_AgencyConfig.md` in
 
 ---
 
-### BUG-4 — Coder writes + pushes the branch but never opens the PR
+### BUG-4 — Coder writes + pushes the branch but never opens the PR ✅ FIXED (`7f4eec5`)
+
+**Resolution (both levers shipped):** **Lever 1** — `harness.coder_prompt` is now an ordered
+checklist with the PR as the final mandatory step + a hard stop (*"NOT complete until
+`gh pr create` prints a URL; pushing the branch is NOT enough"*). **Lever 2 (the real fix)** —
+in the recovery path, BEFORE re-dispatch/escalate, the gate checks whether the latest attempt's
+branch (`max-agency/issue-<N>/attempt-<k>`, k from the marker) exists with commits ahead of the
+default branch and no open PR; if so the **gate opens the PR itself** (`create_pr` op, `[AI-<N>]`
+/ `Closes #<N>`, `pr-open` marker) — matching every other lane where the gate owns the GitHub
+mutation. Ordering honored: open-PR runs ahead of *both* re-dispatch and escalation, so a good
+branch is never orphaned; an indeterminate branch-compare (non-404) skips the tick rather than
+risk a re-dispatch. New helpers `gate.default_branch`/`gate.branch_ahead`/`gate.recover_coder_pr`
++ `executor.plan_open_pr_ops` + the `create_pr` writer op; 6 unit tests. Spec retained below.
 
 **Symptom:** A coder dispatch completes (hermes exit 0) with the work done correctly — the
 branch is pushed with a clean, complete commit — but **no pull request is opened**, so the
