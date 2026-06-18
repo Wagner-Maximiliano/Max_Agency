@@ -228,11 +228,11 @@ def _marker_attempt(marker_fields: dict | None) -> int:
     return int(raw) if raw.isdigit() else 0
 
 
-PROJECT_CONFIG_FILE = "Max_AgencyConfig"
+PROJECT_CONFIG_FILE = "Max_AgencyConfig.md"
 
 
 def fetch_project_models(repo: str, log) -> dict:
-    """Fetch + parse the project repo's Max_AgencyConfig (per-project model overrides).
+    """Fetch + parse the project repo's Max_AgencyConfig.md (per-project model overrides).
 
     Fail-safe: a missing/unreadable/malformed file → {} (the gate uses the global defaults).
     Only GATE_* keys are honored (security boundary; see harness.parse_model_config).
@@ -252,7 +252,7 @@ def fetch_project_models(repo: str, log) -> dict:
 
 
 def resolve_models(args, project_cfg: dict, log) -> None:
-    """Resolve each role's model in place: CLI flag > project Max_AgencyConfig > global
+    """Resolve each role's model in place: CLI flag > project Max_AgencyConfig.md > global
     default (gate/models.env or hardcoded). Mutates args; logs the effective models."""
     args.coder_model = (args.coder_model or project_cfg.get("GATE_CODER_MODEL")
                         or harness.DEFAULT_CODER_MODEL)
@@ -361,12 +361,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--stale-min", type=int, default=15, help="lock staleness threshold")
     ap.add_argument("--triage-model", default=None,
                     help="orchestrator model for triage/expand (else the project's "
-                         "Max_AgencyConfig, then gate/models.env, then gpt-5.4-mini)")
+                         "Max_AgencyConfig.md, then gate/models.env, then gpt-5.4-mini)")
     ap.add_argument("--llm-timeout", type=int, default=harness.DEFAULT_LLM_TIMEOUT_S,
                     help="hard timeout (s) per LLM/CLI call; a hung harness is killed")
     ap.add_argument("--coder-model", default=None,
                     help="coder model via wsl->hermes/OpenRouter (else the project's "
-                         "Max_AgencyConfig, then gate/models.env, then xiaomi/mimo-v2.5)")
+                         "Max_AgencyConfig.md, then gate/models.env, then xiaomi/mimo-v2.5)")
     ap.add_argument("--coder-timeout", type=int, default=harness.DEFAULT_CODER_TIMEOUT_S,
                     help="hard timeout (s) for one coder run (does real work; default 1800). "
                          "When dispatching, set --stale-min >= this/60 so the lock isn't "
@@ -374,10 +374,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-attempts", type=int, default=3,
                     help="coder dispatch attempts before a stuck issue is parked needs-human")
     ap.add_argument("--architect-model", default=None,
-                    help="Claude model for the architect (else project Max_AgencyConfig / "
+                    help="Claude model for the architect (else project Max_AgencyConfig.md / "
                          "models.env / opus)")
     ap.add_argument("--cto-model", default=None,
-                    help="Claude model for the CTO (else project Max_AgencyConfig / "
+                    help="Claude model for the CTO (else project Max_AgencyConfig.md / "
                          "models.env / opus)")
     ap.add_argument("--claude-timeout", type=int, default=harness.DEFAULT_CLAUDE_TIMEOUT_S,
                     help="hard timeout (s) for a Claude architect/CTO call (default 300)")
@@ -429,7 +429,7 @@ def main(argv: list[str] | None = None) -> int:
         writes_enabled = args.mode in ("deterministic-only", "dispatch-enabled")
         writer = executor.GitHubWriter(args.repo) if writes_enabled else None
 
-        # Per-project model selection: the repo's own Max_AgencyConfig (if present) overrides
+        # Per-project model selection: the repo's own Max_AgencyConfig.md (if present) overrides
         # the global defaults. CLI flag > project config > gate/models.env > hardcoded.
         resolve_models(args, fetch_project_models(args.repo, log), log)
 

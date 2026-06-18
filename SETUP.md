@@ -45,7 +45,7 @@ login) · phase tag = earliest phase that needs it.
 
 > ### ⭐ Choosing & testing models (start here)
 >
-> **Per project (the normal way): edit `Max_AgencyConfig` in that project's repo root.** This
+> **Per project (the normal way): edit `Max_AgencyConfig.md` in that project's repo root.** This
 > file is the single, isolated place to set each role's model for one project — Max Agency
 > itself is never touched. `setup.ps1` creates it (pre-filled with defaults + a copy-paste
 > list of options); the gate reads it from the repo on every run, so editing + committing it
@@ -59,16 +59,16 @@ login) · phase tag = earliest phase that needs it.
 > ```powershell
 > pwsh scripts/setup.ps1 -Repo owner/book-repo -CoderModel "anthropic/claude-sonnet-4.6" -NoAutoMerge
 > ```
-> (writes `GATE_CODER_MODEL` into the repo's `Max_AgencyConfig`), or just edit the file in the
+> (writes `GATE_CODER_MODEL` into the repo's `Max_AgencyConfig.md`), or just edit the file in the
 > repo afterward.
 >
 > **Each role's id FORMAT differs** because auth is per-role (see the table below): coder =
 > OpenRouter `provider/model`; triage = a codex model (`gpt-5.4-mini`); architect/CTO = a
-> claude alias (`opus`/`sonnet`). The `Max_AgencyConfig` template lists copy-paste options
+> claude alias (`opus`/`sonnet`). The `Max_AgencyConfig.md` template lists copy-paste options
 > under each field.
 >
 > **`gate/models.env`** in *this* repo is only the GLOBAL fallback (applies to a repo with no
-> `Max_AgencyConfig`). Precedence: project `Max_AgencyConfig` → `$GATE_*_MODEL` env →
+> `Max_AgencyConfig.md`). Precedence: project `Max_AgencyConfig.md` → `$GATE_*_MODEL` env →
 > `gate/models.env` → built-in fallback. **Only `GATE_*` keys are honored** from a project's
 > config (it can never set keys/PATH — a security boundary, since it lives in the project repo).
 >

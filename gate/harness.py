@@ -23,7 +23,7 @@ import subprocess
 
 
 def parse_model_config(text: str) -> dict:
-    """Pure: parse a Max_AgencyConfig / models.env body into {GATE_*: value}.
+    """Pure: parse a Max_AgencyConfig.md / models.env body into {GATE_*: value}.
 
     KEY=VALUE lines; `#` comments and blank lines ignored. **Only `GATE_*` keys are
     accepted** — this is a security boundary: a per-project config (fetched from an
@@ -48,7 +48,7 @@ def _load_model_env() -> None:
     Sets each GATE_* into the process env *only if not already set*, so precedence is:
     CLI flag (--coder-model) > shell env ($GATE_*_MODEL) > models.env > hardcoded fallback.
     Runs at import, before the DEFAULT_*_MODEL constants below read os.environ. (A repo's
-    own per-project Max_AgencyConfig is layered on top of these by the gate at runtime.)
+    own per-project Max_AgencyConfig.md is layered on top of these by the gate at runtime.)
     """
     path = os.path.join(os.path.dirname(__file__), "models.env")
     try:

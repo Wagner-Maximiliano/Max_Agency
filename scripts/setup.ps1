@@ -80,67 +80,82 @@ foreach ($l in $labels) {
   if ($LASTEXITCODE -eq 0) { Ok "label $($l.name)" } else { Warn "label $($l.name) -- gh returned $LASTEXITCODE" }
 }
 
-# -- 3. Create the per-project Max_AgencyConfig in the project repo (create-only) ----
-Say "Ensuring Max_AgencyConfig exists in $Repo..."
+# -- 3. Create the per-project Max_AgencyConfig.md in the project repo (create-only) ----
+Say "Ensuring Max_AgencyConfig.md exists in $Repo..."
 # A 404 here is normal (file not created yet). Under $ErrorActionPreference='Stop' a failing
 # native command (gh) surfaces its stderr as a terminating error, so wrap it in try/catch.
 $cfgPresent = $false
 try {
-  gh api "repos/$Repo/contents/Max_AgencyConfig" 1>$null 2>$null
+  gh api "repos/$Repo/contents/Max_AgencyConfig.md" 1>$null 2>$null
   $cfgPresent = ($LASTEXITCODE -eq 0)
 } catch { $cfgPresent = $false }
 if ($cfgPresent) {
-  Ok "Max_AgencyConfig already present (left as-is; edit it in the repo to change models)"
+  Ok "Max_AgencyConfig.md already present (left as-is; edit it in the repo to change models)"
 } else {
   $coderDefault = if ($CoderModel) { $CoderModel } else { "xiaomi/mimo-v2.5" }
   $cfg = @"
-# ============================================================================
-#  Max_AgencyConfig -- per-project model settings for the Max Agency gate.
-#  Lives in THIS repo's root. The gate reads it each run and uses these models
-#  for THIS project only -- Max Agency itself is never modified. Edit a value,
-#  commit, and the next gate run uses it. Test first:  check_model.py <role> --model <id>
-#
-#  Each role uses a FIXED provider (set by the tool that runs it), so the id
-#  FORMAT differs per field -- copy from the matching list below. Keys live with
-#  the provider (OpenRouter key in ~/.hermes/.env; codex login; claude login).
-# ============================================================================
+# Max_AgencyConfig.md
 
+Per-project model settings for the **Max Agency** gate. This file lives in *this* repo's
+root; the gate reads it on every run and uses these models for **this project only** -- Max
+Agency itself is never modified. Edit a value, **commit + push**, and the next gate run uses it.
+
+> Test a model before relying on it: ``python gate/check_model.py <role> --model <id>``
+> Each role uses a fixed provider, so the id **format differs per field** (see the tables).
+> API keys live with each provider (OpenRouter key in ``~/.hermes/.env``; ``codex`` login;
+> ``claude`` login) -- never in this file.
+
+## Active settings
+
+Edit the values inside this block:
+
+``````ini
 GATE_CODER_MODEL=$coderDefault
 GATE_TRIAGE_MODEL=gpt-5.4-mini
 GATE_ARCHITECT_MODEL=opus
 GATE_CTO_MODEL=opus
+``````
 
-# ---- GATE_CODER_MODEL options (hermes -> OpenRouter; always "provider/model";
-#      verify exact slug at https://openrouter.ai/models -- check_model.py validates):
-#   xiaomi/mimo-v2.5              # strong coder (default)
-#   anthropic/claude-sonnet-4.6  # excellent writer -- good for prose/book repos
-#   anthropic/claude-opus-4.8    # top quality, higher cost
-#   openai/gpt-5.4               # strong all-rounder
-#   google/gemini-2.5-pro        # long-context all-rounder
-#   deepseek/deepseek-v3.2       # cheap, capable
-#   qwen/qwen3-coder             # budget coder
-#   x-ai/grok-4                  # all-rounder
-#   meta-llama/llama-4-maverick  # open-weight
-#   mistralai/mistral-large-2    # open-weight
-#
-# ---- GATE_TRIAGE_MODEL options (codex CLI / OpenAI auth):
-#   gpt-5.4-mini                 # cheap, default (verified accepted)
-#   gpt-5.4                      # stronger, pricier
-#
-# ---- GATE_ARCHITECT_MODEL / GATE_CTO_MODEL options (claude CLI / Anthropic auth):
-#   opus                         # latest Opus (default)
-#   sonnet                       # faster / cheaper
-#   haiku                        # cheapest
-#   claude-opus-4-8              # pin a specific version
-#   claude-sonnet-4-6
-# ============================================================================
+## Model options (copy a value into the matching field above)
+
+### ``GATE_CODER_MODEL`` -- hermes -> OpenRouter (format ``provider/model``; verify slug at <https://openrouter.ai/models>)
+
+| model | notes |
+|---|---|
+| ``xiaomi/mimo-v2.5`` | strong coder (default) |
+| ``anthropic/claude-sonnet-4.6`` | excellent writer -- good for prose/book repos |
+| ``anthropic/claude-opus-4.8`` | top quality, higher cost |
+| ``openai/gpt-5.4`` | strong all-rounder |
+| ``google/gemini-2.5-pro`` | long-context all-rounder |
+| ``deepseek/deepseek-v3.2`` | cheap, capable |
+| ``qwen/qwen3-coder`` | budget coder |
+| ``x-ai/grok-4`` | all-rounder |
+| ``meta-llama/llama-4-maverick`` | open-weight |
+| ``mistralai/mistral-large-2`` | open-weight |
+
+### ``GATE_TRIAGE_MODEL`` -- codex CLI (OpenAI auth)
+
+| model | notes |
+|---|---|
+| ``gpt-5.4-mini`` | cheap, default (verified accepted) |
+| ``gpt-5.4`` | stronger, pricier |
+
+### ``GATE_ARCHITECT_MODEL`` / ``GATE_CTO_MODEL`` -- claude CLI (Anthropic auth)
+
+| model | notes |
+|---|---|
+| ``opus`` | latest Opus (default) |
+| ``sonnet`` | faster / cheaper |
+| ``haiku`` | cheapest |
+| ``claude-opus-4-8`` | pin a specific version |
+| ``claude-sonnet-4-6`` | |
 "@
   $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cfg))
   try {
-    gh api "repos/$Repo/contents/Max_AgencyConfig" -X PUT -f "message=Add Max_AgencyConfig (Max Agency per-project model settings)" -f "content=$b64" 1>$null 2>$null
-    if ($LASTEXITCODE -eq 0) { Ok "created Max_AgencyConfig in $Repo (coder=$coderDefault)" }
-    else { Warn "could not create Max_AgencyConfig (gh returned $LASTEXITCODE)" }
-  } catch { Warn "could not create Max_AgencyConfig: $($_.Exception.Message)" }
+    gh api "repos/$Repo/contents/Max_AgencyConfig.md" -X PUT -f "message=Add Max_AgencyConfig.md (Max Agency per-project model settings)" -f "content=$b64" 1>$null 2>$null
+    if ($LASTEXITCODE -eq 0) { Ok "created Max_AgencyConfig.md in $Repo (coder=$coderDefault)" }
+    else { Warn "could not create Max_AgencyConfig.md (gh returned $LASTEXITCODE)" }
+  } catch { Warn "could not create Max_AgencyConfig.md: $($_.Exception.Message)" }
 }
 
 # -- 4. Register the single gate scheduled task ----
