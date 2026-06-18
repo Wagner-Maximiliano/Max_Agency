@@ -94,7 +94,7 @@ if ($cfgPresent) {
 } else {
   $coderDefault = if ($CoderModel) { $CoderModel } else { "xiaomi/mimo-v2.5" }
   $cfg = @"
-# Max_AgencyConfig.md
+# Max Agency -- project model settings
 
 Per-project model settings for the **Max Agency** gate. This file lives in *this* repo's
 root; the gate reads it on every run and uses these models for **this project only** -- Max
