@@ -27,6 +27,7 @@ param(
   [switch]$NoAutoMerge,
   [int]$IntervalMinutes = 5,
   [string]$ScopeLabel = "AI",
+  [string]$CoderModel,                 # per-repo coder model (else the gate default from gate/models.env)
   [switch]$NoTask,
   [string]$RepoRoot
 )
@@ -88,6 +89,7 @@ if ($NoTask) {
   $reg = Join-Path $RepoRoot "scripts\register-gate-task.ps1"
   $regArgs = @{ Repo = $Repo; Mode = $Mode; IntervalMinutes = $IntervalMinutes; ScopeLabel = $ScopeLabel; RepoRoot = $RepoRoot }
   if ($NoAutoMerge) { $regArgs.NoAutoMerge = $true }
+  if ($CoderModel)  { $regArgs.CoderModel = $CoderModel }
   & $reg @regArgs
 }
 

@@ -21,6 +21,31 @@ import re
 import shutil
 import subprocess
 
+
+def _load_model_env() -> None:
+    """Load model defaults from gate/models.env (the single human-editable model config).
+
+    Sets each KEY=VALUE into the process env *only if not already set*, so precedence is:
+    CLI flag (e.g. --coder-model) > shell env ($GATE_*_MODEL) > models.env > hardcoded
+    fallback. Runs at import, before the DEFAULT_*_MODEL constants below read os.environ.
+    """
+    path = os.path.join(os.path.dirname(__file__), "models.env")
+    try:
+        with open(path, encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key, val = key.strip(), val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except FileNotFoundError:
+        pass
+
+
+_load_model_env()
+
 # Verdict token (first line of the model's reply) → the label the gate applies.
 TRIAGE_TOKENS = {
     "ROLE_CODER": "role:coder",
@@ -346,3 +371,42 @@ def run_llm(cmd: list[str], timeout_s: int, input_text: str = "",
         return {"returncode": None, "timed_out": False, "stdout": "", "stderr": str(e)}
     return {"returncode": out.returncode, "timed_out": False,
             "stdout": out.stdout, "stderr": out.stderr}
+
+
+# ── Model self-test pings (used by gate/check_model.py) ───────────────────────
+# A minimal, side-effect-free prompt per role: confirm the configured model + its CLI/auth
+# actually respond. Each mirrors the real harness invocation path (same CLI, same flags).
+# Each builder returns (argv, stdin_text).
+_PING = "Reply with the single word READY and nothing else."
+
+
+def _coder_ping(model: str):
+    # OpenRouter model via wsl -> hermes (no tools, one turn). Prompt via -q.
+    script = (f"set -a; source ~/.hermes/.env; set +a; "
+              f"hermes -p coder chat -q {_shquote(_PING)} -m {_shquote(model)} -Q --max-turns 1")
+    return ["wsl.exe", "-e", "bash", "-lc", script], ""
+
+
+def _triage_ping(model: str):
+    # codex (OpenAI), read-only. Prompt as a positional arg.
+    return (["codex", "exec", "-m", model, "-c", "model_reasoning_effort=low",
+             "-s", "read-only", "--skip-git-repo-check", _PING], "")
+
+
+def _claude_ping(model: str):
+    # claude, no tools. NOTE: claude's --tools is variadic and would swallow a trailing
+    # positional prompt, so we end on a flag (--append-system-prompt) and feed the prompt
+    # on stdin (same shape as the real architect/CTO calls).
+    return (["claude", "-p", "--model", model, "--tools", "",
+             "--append-system-prompt", "You have no tools; answer directly."], _PING)
+
+
+PING_BUILDERS = {"coder": _coder_ping, "triage": _triage_ping,
+                 "architect": _claude_ping, "cto": _claude_ping}
+
+PING_DEFAULT_MODEL = {
+    "coder": lambda: DEFAULT_CODER_MODEL,
+    "triage": lambda: DEFAULT_TRIAGE_MODEL,
+    "architect": lambda: DEFAULT_ARCHITECT_MODEL,
+    "cto": lambda: DEFAULT_CTO_MODEL,
+}

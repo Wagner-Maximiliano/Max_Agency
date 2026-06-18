@@ -43,6 +43,39 @@ login) · phase tag = earliest phase that needs it.
 
 ## 2. Vendor CLIs & model access  *(per role)*
 
+> ### ⭐ Choosing & testing models (start here)
+>
+> **Where to set the model for each role:** edit **`gate/models.env`** — one line per role
+> (`GATE_CODER_MODEL`, `GATE_TRIAGE_MODEL`, `GATE_ARCHITECT_MODEL`, `GATE_CTO_MODEL`). That
+> file is fully commented. The **coder** is the one you'll most likely change per project:
+> it runs through OpenRouter, so its value is an OpenRouter id of the form `provider/model`
+> (the provider is baked into the id; one `OPENROUTER_API_KEY` covers all of them). Use a
+> **coding** model for code repos (`xiaomi/mimo-v2.5`) and a **writing** model for prose/book
+> repos (e.g. `anthropic/claude-sonnet-4.6`, `openai/gpt-5.4` — browse
+> <https://openrouter.ai/models>).
+>
+> **Per-project override (recommended over editing the global file):** onboard a repo with a
+> specific coder model — it gets baked into *that repo's* scheduled task:
+> ```powershell
+> pwsh scripts/setup.ps1 -Repo owner/book-repo -CoderModel "anthropic/claude-sonnet-4.6" -NoAutoMerge
+> ```
+> Precedence: per-repo task arg (`-CoderModel`) → shell env (`$GATE_CODER_MODEL`) →
+> `gate/models.env` → built-in fallback.
+>
+> **Where the API keys live** (NOT in `models.env` — keys stay with each provider):
+> | Role | Provider / CLI | Key location | Sign in / verify |
+> |---|---|---|---|
+> | coder | OpenRouter (via hermes/WSL) | `OPENROUTER_API_KEY` in `~/.hermes/.env` (WSL) | `wsl -e bash -lc "grep -c OPENROUTER_API_KEY ~/.hermes/.env"` |
+> | triage / expansion | OpenAI (`codex` CLI) | `codex` login (ChatGPT acct or API key) | `codex` then `/login` |
+> | architect / CTO | Anthropic (`claude` CLI) | `claude` login (or `ANTHROPIC_API_KEY`) | `claude` then `/login` |
+>
+> **Test a model in ~30s** (runs the configured model through the real CLI path and prints
+> PASS/FAIL — catches a bad id, a missing CLI, or expired auth):
+> ```sh
+> python gate/check_model.py coder        # also: triage | architect | cto
+> python gate/check_model.py coder --model anthropic/claude-sonnet-4.6   # try one before committing
+> ```
+
 - [ ] **`codex` CLI** — orchestrator harness (triage). Install: `npm install -g @openai/codex`.
       Authenticate (ChatGPT account *or* OpenAI API key). Verify: `codex --version`;
       `codex exec -m gpt-5.4-mini "Reply OK"`. **2C.** `[manual]`

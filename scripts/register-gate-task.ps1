@@ -26,6 +26,7 @@ param(
   [ValidateSet("dry-run", "deterministic-only", "dispatch-enabled")][string]$Mode = "dispatch-enabled",
   [string]$ScopeLabel = "AI",
   [switch]$NoAutoMerge,
+  [string]$CoderModel,                         # per-repo coder model (else the gate default from gate/models.env)
   [string]$TaskName = "MaxAgencyGate",
   [string]$PythonExe,
   [int]$StaleMin = 35,                       # > the coder timeout (min) so the lock isn't reclaimed mid-build
@@ -60,6 +61,7 @@ if (-not (Test-Path $gate)) { throw "gate.py not found at $gate" }
 $argList = @("`"$gate`"", "--repo", $Repo, "--mode", $Mode, "--scope-label", $ScopeLabel,
              "--stale-min", $StaleMin)
 if ($NoAutoMerge) { $argList += "--no-auto-merge" }
+if ($CoderModel)  { $argList += @("--coder-model", "`"$CoderModel`"") }
 
 $action  = New-ScheduledTaskAction -Execute $PythonExe -Argument ($argList -join " ") -WorkingDirectory $RepoRoot
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) `
