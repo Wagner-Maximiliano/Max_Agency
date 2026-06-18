@@ -352,6 +352,56 @@ model for the soak test book repo, edit `Max_AgencyConfig.md` in
 
 ---
 
+### BUG-4 — Coder writes + pushes the branch but never opens the PR
+
+**Symptom:** A coder dispatch completes (hermes exit 0) with the work done correctly — the
+branch is pushed with a clean, complete commit — but **no pull request is opened**, so the
+gate never sees the work (it keys recovery/CTO routing off an *open PR*) and the issue sits
+in `in-progress` until recovery re-dispatches it. Observed on `Surviving_The_AI_World`
+issue #61 with `deepseek/deepseek-v4-flash`: attempt 1 (~2.5 min) pushed nothing; attempt 2
+(~6 min) pushed branch `max-agency/issue-61/attempt-2` with all 6 correct files + a clean
+commit, then stopped at the diff-review step without running `gh pr create`. Confirmed via
+the FEAT-1 transcript (`runtime/logs/transcripts/20260618T211529Z-040d.txt`): the SENT
+prompt *does* ask for the PR; the model simply doesn't carry through the final step.
+
+**Root cause:** A weaker tool-calling coder model treats "branch pushed" as a natural
+stopping point and doesn't reliably execute the final `gh pr create`. The coder is the
+**only** lane in the pipeline where an LLM performs a GitHub mutation itself — everywhere
+else (triage, architect, kickoff-expand, CTO) the LLM produces content and the *gate*
+applies all GitHub changes deterministically (the least-privilege design, §2/§7). The
+coder's reliance on the model to open its own PR is an architectural inconsistency that
+this bug exposes.
+
+**Fix — two levers, do both (Lever 2 is the real fix):**
+
+- **Lever 1 — harden the coder prompt** (`harness.build_coder_command` in `harness.py`).
+  Reframe the instruction as an explicit ordered checklist with the PR as the **final
+  mandatory gate**, add a hard stop condition (*"the task is NOT complete until
+  `gh pr create` succeeds and prints a PR URL — do not stop after pushing the branch"*),
+  and a self-verify step (*"then run `gh pr view` to confirm the PR exists"*). Raises the
+  success rate but does not guarantee it for weak models. NOTE: this prompt is **gate core
+  shared across every project and coder model** — it also affects mimo; treat as a core
+  change (owner approval).
+
+- **Lever 2 — have the gate open the PR deterministically** (`gate.py` / `executor.py`).
+  After a coder run, detect the state "branch `max-agency/issue-<N>/attempt-<k>` exists +
+  is ahead of base + no open PR linked to the issue" and have the **gate** run
+  `gh pr create` itself (it already knows the branch, issue #, and the `[AI-<N>]` /
+  `Closes #<N>` conventions). The model does only what it does reliably (write + commit +
+  push); the gate owns the GitHub mutation, exactly as every other lane already works. This
+  removes the dependency on the weakest model capability, works for **any** coder model,
+  and fixes the architectural inconsistency. Keep it idempotent (don't create a second PR if
+  one already exists) and fail-safe (branch pushed but zero commits ahead → no PR, log it).
+
+**Files:** `gate/harness.py` (Lever 1 prompt), `gate/gate.py` + `gate/executor.py`
+(Lever 2 detect-and-create). Unit-test both (mock `gh`); validate live on a throwaway repo.
+
+**Interim workaround:** same as BUG-3 — use `xiaomi/mimo-v2.5` (reliably opens its own
+PRs). deepseek's *content* is good; only the PR handshake fails, so a pushed branch can be
+turned into a PR by hand (`gh pr create`) to unblock the CTO leg in the meantime.
+
+---
+
 ## 11. Soak test — proposed enhancements (not yet built)
 
 Enhancements requested during the soak test. **Not bugs** — the system works without
