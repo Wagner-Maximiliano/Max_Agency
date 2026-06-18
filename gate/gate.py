@@ -228,6 +228,45 @@ def _marker_attempt(marker_fields: dict | None) -> int:
     return int(raw) if raw.isdigit() else 0
 
 
+PROJECT_CONFIG_FILE = "Max_AgencyConfig"
+
+
+def fetch_project_models(repo: str, log) -> dict:
+    """Fetch + parse the project repo's Max_AgencyConfig (per-project model overrides).
+
+    Fail-safe: a missing/unreadable/malformed file → {} (the gate uses the global defaults).
+    Only GATE_* keys are honored (security boundary; see harness.parse_model_config).
+    """
+    try:
+        encoded = gh_text(["api", f"repos/{repo}/contents/{PROJECT_CONFIG_FILE}", "--jq", ".content"])
+    except GhError:
+        return {}  # no config file (or unreadable) — global defaults
+    try:
+        text = base64.b64decode(encoded).decode("utf-8", "replace") if encoded.strip() else ""
+    except (ValueError, TypeError):
+        return {}
+    cfg = harness.parse_model_config(text)
+    if cfg:
+        log("project-config", file=PROJECT_CONFIG_FILE, models=cfg)
+    return cfg
+
+
+def resolve_models(args, project_cfg: dict, log) -> None:
+    """Resolve each role's model in place: CLI flag > project Max_AgencyConfig > global
+    default (gate/models.env or hardcoded). Mutates args; logs the effective models."""
+    args.coder_model = (args.coder_model or project_cfg.get("GATE_CODER_MODEL")
+                        or harness.DEFAULT_CODER_MODEL)
+    args.triage_model = (args.triage_model or project_cfg.get("GATE_TRIAGE_MODEL")
+                         or harness.DEFAULT_TRIAGE_MODEL)
+    args.architect_model = (args.architect_model or project_cfg.get("GATE_ARCHITECT_MODEL")
+                            or harness.DEFAULT_ARCHITECT_MODEL)
+    args.cto_model = (args.cto_model or project_cfg.get("GATE_CTO_MODEL")
+                      or harness.DEFAULT_CTO_MODEL)
+    log("models", coder=args.coder_model, triage=args.triage_model,
+        architect=args.architect_model, cto=args.cto_model,
+        per_project=bool(project_cfg))
+
+
 def parse_parent_ref(body: str) -> int | None:
     """The parent issue number a kickoff was created from (`Approved-plan: #N`)."""
     m = re.search(r"Approved-plan:\s*#(\d+)", body or "")
@@ -320,24 +359,26 @@ def main(argv: list[str] | None = None) -> int:
                     help="also report open issues that would be ignored (no scope label)")
     ap.add_argument("--stuck-min", type=int, default=60)
     ap.add_argument("--stale-min", type=int, default=15, help="lock staleness threshold")
-    ap.add_argument("--triage-model", default=harness.DEFAULT_TRIAGE_MODEL,
-                    help="orchestrator model for triage (default: benchmarked gpt-5.4-mini, "
-                         "override via --triage-model or $GATE_TRIAGE_MODEL)")
+    ap.add_argument("--triage-model", default=None,
+                    help="orchestrator model for triage/expand (else the project's "
+                         "Max_AgencyConfig, then gate/models.env, then gpt-5.4-mini)")
     ap.add_argument("--llm-timeout", type=int, default=harness.DEFAULT_LLM_TIMEOUT_S,
                     help="hard timeout (s) per LLM/CLI call; a hung harness is killed")
-    ap.add_argument("--coder-model", default=harness.DEFAULT_CODER_MODEL,
-                    help="coder model dispatched via wsl->hermes (default: benchmarked "
-                         "xiaomi/mimo-v2.5, override via --coder-model or $GATE_CODER_MODEL)")
+    ap.add_argument("--coder-model", default=None,
+                    help="coder model via wsl->hermes/OpenRouter (else the project's "
+                         "Max_AgencyConfig, then gate/models.env, then xiaomi/mimo-v2.5)")
     ap.add_argument("--coder-timeout", type=int, default=harness.DEFAULT_CODER_TIMEOUT_S,
                     help="hard timeout (s) for one coder run (does real work; default 1800). "
                          "When dispatching, set --stale-min >= this/60 so the lock isn't "
                          "reclaimed mid-build")
     ap.add_argument("--max-attempts", type=int, default=3,
                     help="coder dispatch attempts before a stuck issue is parked needs-human")
-    ap.add_argument("--architect-model", default=harness.DEFAULT_ARCHITECT_MODEL,
-                    help="Claude model for the architect (plan generation); default opus")
-    ap.add_argument("--cto-model", default=harness.DEFAULT_CTO_MODEL,
-                    help="Claude model for the CTO (PR review); default opus")
+    ap.add_argument("--architect-model", default=None,
+                    help="Claude model for the architect (else project Max_AgencyConfig / "
+                         "models.env / opus)")
+    ap.add_argument("--cto-model", default=None,
+                    help="Claude model for the CTO (else project Max_AgencyConfig / "
+                         "models.env / opus)")
     ap.add_argument("--claude-timeout", type=int, default=harness.DEFAULT_CLAUDE_TIMEOUT_S,
                     help="hard timeout (s) for a Claude architect/CTO call (default 300)")
     ap.add_argument("--auto-merge", action=argparse.BooleanOptionalAction, default=True,
@@ -387,6 +428,10 @@ def main(argv: list[str] | None = None) -> int:
         closed_numbers = {c["number"] for c in closed}
         writes_enabled = args.mode in ("deterministic-only", "dispatch-enabled")
         writer = executor.GitHubWriter(args.repo) if writes_enabled else None
+
+        # Per-project model selection: the repo's own Max_AgencyConfig (if present) overrides
+        # the global defaults. CLI flag > project config > gate/models.env > hardcoded.
+        resolve_models(args, fetch_project_models(args.repo, log), log)
 
         log("scan", scoped_issue_count=len(issues))
         counts: dict[str, int] = {}

@@ -22,26 +22,41 @@ import shutil
 import subprocess
 
 
-def _load_model_env() -> None:
-    """Load model defaults from gate/models.env (the single human-editable model config).
+def parse_model_config(text: str) -> dict:
+    """Pure: parse a Max_AgencyConfig / models.env body into {GATE_*: value}.
 
-    Sets each KEY=VALUE into the process env *only if not already set*, so precedence is:
-    CLI flag (e.g. --coder-model) > shell env ($GATE_*_MODEL) > models.env > hardcoded
-    fallback. Runs at import, before the DEFAULT_*_MODEL constants below read os.environ.
+    KEY=VALUE lines; `#` comments and blank lines ignored. **Only `GATE_*` keys are
+    accepted** — this is a security boundary: a per-project config (fetched from an
+    untrusted project repo) can influence model selection and nothing else (it can never
+    set PATH, API keys, etc.).
+    """
+    out: dict[str, str] = {}
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        key, val = key.strip(), val.strip().strip('"').strip("'")
+        if key.startswith("GATE_") and val:
+            out[key] = val
+    return out
+
+
+def _load_model_env() -> None:
+    """Load model defaults from gate/models.env (the global human-editable model config).
+
+    Sets each GATE_* into the process env *only if not already set*, so precedence is:
+    CLI flag (--coder-model) > shell env ($GATE_*_MODEL) > models.env > hardcoded fallback.
+    Runs at import, before the DEFAULT_*_MODEL constants below read os.environ. (A repo's
+    own per-project Max_AgencyConfig is layered on top of these by the gate at runtime.)
     """
     path = os.path.join(os.path.dirname(__file__), "models.env")
     try:
-        with open(path, encoding="utf-8") as f:
-            for raw in f:
-                line = raw.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, val = line.split("=", 1)
-                key, val = key.strip(), val.strip().strip('"').strip("'")
-                if key and key not in os.environ:
-                    os.environ[key] = val
+        text = open(path, encoding="utf-8").read()
     except FileNotFoundError:
-        pass
+        return
+    for key, val in parse_model_config(text).items():
+        os.environ.setdefault(key, val)
 
 
 _load_model_env()

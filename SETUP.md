@@ -45,22 +45,32 @@ login) · phase tag = earliest phase that needs it.
 
 > ### ⭐ Choosing & testing models (start here)
 >
-> **Where to set the model for each role:** edit **`gate/models.env`** — one line per role
-> (`GATE_CODER_MODEL`, `GATE_TRIAGE_MODEL`, `GATE_ARCHITECT_MODEL`, `GATE_CTO_MODEL`). That
-> file is fully commented. The **coder** is the one you'll most likely change per project:
-> it runs through OpenRouter, so its value is an OpenRouter id of the form `provider/model`
-> (the provider is baked into the id; one `OPENROUTER_API_KEY` covers all of them). Use a
-> **coding** model for code repos (`xiaomi/mimo-v2.5`) and a **writing** model for prose/book
-> repos (e.g. `anthropic/claude-sonnet-4.6`, `openai/gpt-5.4` — browse
-> <https://openrouter.ai/models>).
+> **Per project (the normal way): edit `Max_AgencyConfig` in that project's repo root.** This
+> file is the single, isolated place to set each role's model for one project — Max Agency
+> itself is never touched. `setup.ps1` creates it (pre-filled with defaults + a copy-paste
+> list of options); the gate reads it from the repo on every run, so editing + committing it
+> takes effect on the next tick. One line per role: `GATE_CODER_MODEL`, `GATE_TRIAGE_MODEL`,
+> `GATE_ARCHITECT_MODEL`, `GATE_CTO_MODEL`.
 >
-> **Per-project override (recommended over editing the global file):** onboard a repo with a
-> specific coder model — it gets baked into *that repo's* scheduled task:
+> **The coder is the one you'll most likely change** (e.g. a writing model for a book repo): it
+> runs through OpenRouter, so its value is an OpenRouter id `provider/model` — `xiaomi/mimo-v2.5`
+> for code, `anthropic/claude-sonnet-4.6`/`openai/gpt-5.4` for prose (browse
+> <https://openrouter.ai/models>). **Set it at onboarding** with:
 > ```powershell
 > pwsh scripts/setup.ps1 -Repo owner/book-repo -CoderModel "anthropic/claude-sonnet-4.6" -NoAutoMerge
 > ```
-> Precedence: per-repo task arg (`-CoderModel`) → shell env (`$GATE_CODER_MODEL`) →
-> `gate/models.env` → built-in fallback.
+> (writes `GATE_CODER_MODEL` into the repo's `Max_AgencyConfig`), or just edit the file in the
+> repo afterward.
+>
+> **Each role's id FORMAT differs** because auth is per-role (see the table below): coder =
+> OpenRouter `provider/model`; triage = a codex model (`gpt-5.4-mini`); architect/CTO = a
+> claude alias (`opus`/`sonnet`). The `Max_AgencyConfig` template lists copy-paste options
+> under each field.
+>
+> **`gate/models.env`** in *this* repo is only the GLOBAL fallback (applies to a repo with no
+> `Max_AgencyConfig`). Precedence: project `Max_AgencyConfig` → `$GATE_*_MODEL` env →
+> `gate/models.env` → built-in fallback. **Only `GATE_*` keys are honored** from a project's
+> config (it can never set keys/PATH — a security boundary, since it lives in the project repo).
 >
 > **Where the API keys live** (NOT in `models.env` — keys stay with each provider):
 > | Role | Provider / CLI | Key location | Sign in / verify |
