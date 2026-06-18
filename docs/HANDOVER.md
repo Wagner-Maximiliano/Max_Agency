@@ -79,7 +79,8 @@ with no manual label-fixing and no babysitting.
   specs → the gate creates coder task issues (no-dep `ready`, dep `backlog` + `Depends-on:`
   resolved to real numbers), `expanding` marker before any create (idempotent), then marks
   the kickoff `expanded` + closes it. The full idea→merge chain now connects end to end.
-- **138 gate unit tests passing.** Phases 2A–2E + kickoff-expansion validated live on a
+- **170 gate unit tests passing** (138 through kickoff-expansion + 32 from the soak-test
+  backlog, §10–§11 below — all shipped 2026-06-18). Phases 2A–2E + kickoff-expansion validated live on a
   throwaway repo (test issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
   must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
   caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
@@ -286,13 +287,22 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs (address in a future session)
+## 10. Soak test — known bugs ✅ ALL FIXED (2026-06-18)
 
 Bugs found during the first live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
-(2026-06-18). Do not touch gate core code without the owner's approval; verify each fix
-with a unit test + live run before closing.
+(2026-06-18). **All three fixed + unit-tested 2026-06-18** (commits `429c940`, `4d0f216`,
+`ab9903a` on `claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so they
+were shipped on the unit suite (170 tests green), to be exercised by the running soak test.
+The spec for each is kept below as the record. Two design decisions resolved explicitly: see
+BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/` log root).
 
-### BUG-1 — Approve→kickoff→expand takes two ticks instead of one
+### BUG-1 — Approve→kickoff→expand takes two ticks instead of one ✅ FIXED (`4d0f216`)
+
+**Resolution:** collapsed approve→kickoff and would-expand-kickoff into one compound op (the
+*second* fix option below). The gate now captures the created kickoff number and expands it
+in the same tick via the shared `_expand_kickoff` core; the standalone `would-expand-kickoff`
+path stays as the idempotent recovery fallback. Chose this over the second-pass sweep because
+it is bounded (one extra orchestrator call) and can't cascade LLM calls within a tick.
 
 **Symptom:** After the owner posts `APPROVE`, the gate executes the `approve→kickoff` op
 (creates the kickoff issue, flips label to `kickoff`) in tick N. The kickoff issue then
@@ -310,7 +320,11 @@ a single compound action (creates the kickoff *and* calls the orchestrator in on
 
 ---
 
-### BUG-2 — Dispatch marker comment appears blank to users
+### BUG-2 — Dispatch marker comment appears blank to users ✅ FIXED (`429c940`)
+
+**Resolution:** `executor.render_marker` now prepends a visible stub line
+(`_Max Agency gate marker — do not edit._` + blank line) before the HTML block. `parse_marker`
+still round-trips (the stub has no `key: value` shape, so it is never read as a field).
 
 **Symptom:** When the gate writes or updates a dispatch marker, GitHub shows an empty
 comment. Observed on `Surviving_The_AI_World` issue #60.
@@ -328,7 +342,13 @@ stays intact for machine parsing; the stub line makes the comment non-blank.
 
 ---
 
-### BUG-3 — `check_model` ping does not validate agentic tool use
+### BUG-3 — `check_model` ping does not validate agentic tool use ✅ FIXED (`ab9903a`)
+
+**Resolution:** added `python gate/check_model.py coder --smoke --repo owner/repo` — a real
+branch→commit→draft-PR round-trip that then **verifies a PR actually landed** (PR presence is
+the source of truth, not the exit code — a clean hermes exit with no PR is the FAIL the ping
+missed) and always cleans up (close PR + delete branch). Not auto-wired into `setup.ps1` (it
+mutates the target repo; opt-in by design).
 
 **Symptom:** `python gate/check_model.py coder --model deepseek/deepseek-v4-flash` returned
 PASS, the gate dispatched the coder, hermes exited 0 in ~2.5 min, but no branch, commit,
@@ -402,13 +422,24 @@ turned into a PR by hand (`gh pr create`) to unblock the CTO leg in the meantime
 
 ---
 
-## 11. Soak test — proposed enhancements (not yet built)
+## 11. Soak test — enhancements ✅ BOTH BUILT (2026-06-18)
 
-Enhancements requested during the soak test. **Not bugs** — the system works without
-them. Do not implement without the owner's go-ahead; when building, follow the per-phase
-loop (§5) and update the docs listed under each item.
+Enhancements requested during the soak test. **Both shipped 2026-06-18** (commits `991aada`
+FEAT-1, `0b0db68` FEAT-2). Specs kept below as the record; the doc deliverables at the end of
+this section are done (SETUP.md §5+§7, Human_Runbook.md gate-banner note, `.gitignore`
+confirmed).
 
-### FEAT-1 — Full LLM transcript logging (every agent, zero extra tokens)
+### FEAT-1 — Full LLM transcript logging (every agent, zero extra tokens) ✅ BUILT (`991aada`)
+
+**Resolution + path decision:** implemented at the single chokepoint `harness.run_llm` (new
+`transcript=` kwarg → `append_transcript` + `_redact`). **Storage: `runtime/logs/transcripts/
+<run_id>.txt`** — the path inconsistency was resolved by using the **existing `runtime/` root**
+(not a new top-level `logs/`): transcripts then genuinely co-locate with the decision JSONL
+(`runtime/logs/gate/`), honor `--runtime-dir`, and let FEAT-2 sweep one tree. **Security held:**
+the command/argv is never logged (the coder argv carries `source ~/.hermes/.env`) — only the
+caller-supplied prompt (`harness.coder_prompt` for the coder, whose prompt is in argv) + model,
+both passed through a defensive credential scrub. No LLM call ⇒ no file; a transcript write can
+never fail a tick.
 
 **Goal:** Persist the exact prompt sent to and raw response received from every LLM call,
 to disk, so failures like BUG-3 (coder exits 0 but opens no PR) can be diagnosed by
@@ -444,7 +475,13 @@ prompt + model only, never the env-sourcing prefix or any token. Mirror the exis
 which already keeps secrets out. Treat the model's *response* as untrusted data too (it can
 contain anything) — it's fine on disk, just never executed.
 
-### FEAT-2 — Daily log-retention cleanup task (via setup.ps1)
+### FEAT-2 — Daily log-retention cleanup task (via setup.ps1) ✅ BUILT (`0b0db68`)
+
+**Resolution:** `setup.ps1 -RetentionDays N` (default 7) registers a second hidden daily task
+`MaxAgencyLogCleanup` via new `scripts/register-log-cleanup-task.ps1` → `scripts/clean-logs.ps1`
+(deletes files under `runtime\logs` + `logs` older than N days). Idempotent (re-run updates in
+place). Both `.ps1` ASCII-only + parse-clean; `clean-logs.ps1` is also runnable by hand and was
+verified against a temp tree.
 
 **Goal:** Stop `logs/` (transcripts especially — full prompts + responses every tick) from
 growing without bound.
@@ -459,13 +496,13 @@ growing without bound.
   (`Get-ChildItem -Recurse | Where LastWriteTime -lt (Get-Date).AddDays(-7) | Remove-Item`)
   — keep the retention window a parameter (default 7) so it's tunable.
 
-### Doc updates required when FEAT-1/FEAT-2 land (deliverables, do with the code)
+### Doc updates when FEAT-1/FEAT-2 landed (deliverables) — ✅ ALL DONE (`0b0db68`)
 
-- **`.gitignore`** — already covers it: both `logs/` and `runtime/` are ignored, so
-  `logs/transcripts/` is never committed. **No change needed** (verified 2026-06-18); just
-  confirm it still holds when adding the folder.
-- **`SETUP.md`** — add the `logs/transcripts/` folder + the `MaxAgencyLogCleanup` task to
-  the checklist (which phase, `[auto]` via setup.ps1, a verify command).
-- **`Human_Runbook.md`** — document where transcripts live and the 7-day retention, in the
-  troubleshooting section (note: this file is still the banner-flagged retired flow pending
-  the Phase 3 rewrite — fold this in during that rewrite rather than extending the old text).
+- **`.gitignore`** — ✅ confirmed: both `logs/` and `runtime/` are ignored, so
+  `runtime/logs/transcripts/` is never committed. No change needed (re-verified 2026-06-18).
+- **`SETUP.md`** — ✅ done: §5 gains the `MaxAgencyLogCleanup` task (`[auto]` via setup.ps1 +
+  verify command); new §7 (Observability & logs) documents both log trees, the
+  `runtime/logs/transcripts/` path, retention, and the no-secrets guarantee.
+- **`Human_Runbook.md`** — ✅ done: a gate-banner troubleshooting note points at the
+  transcripts + 7-day retention, folded into the current-system banner (not the retired
+  step-by-step), to be carried into the Phase 3 rewrite.

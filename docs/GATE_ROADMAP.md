@@ -184,7 +184,8 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     `updateIssueComment` (node id) — REST PATCH 404s on the node id `gh` returns, which had
     let a failed marker write risk a *duplicate kickoff*; (b) `edit_labels` does adds-first
     then removes in separate calls, so a missing repo label can't half-strip an issue.
-  - **Kickoff expansion** (orchestrator) ✅ **DONE — built, 138 unit tests, validated live.**
+  - **Kickoff expansion** (orchestrator) ✅ **DONE — built, validated live (138 unit tests at
+    this milestone; 170 after soak-hardening below).**
     Closes a gap between 2E and 2F: the `would-expand-kickoff` action was in the state machine
     but never wired. The orchestrator (`gpt-5.4-mini` via `codex`, read-only, approved
     `PLAN.md` on stdin) returns a JSON array of 1–6 task specs; the gate creates one coder
@@ -203,6 +204,14 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     `TemporaryDirectory(ignore_cleanup_errors=True)` (wsl left the dir busy on Windows → an
     `unexpected` crash) and per-issue try/except in the main loop (one bad issue no longer
     aborts the tick). **Old code kept in git history (reversible).**
+  - **Soak-test hardening** (first live soak on `Surviving_The_AI_World`) ✅ **DONE — 170 unit
+    tests, 2026-06-18.** Three bugs + two features: **BUG-2** visible stub on marker comments
+    (were blank HTML-only); **BUG-1** an approved kickoff is expanded in the same tick it's
+    created (compound op, standalone expand kept as the idempotent fallback); **BUG-3**
+    `check_model coder --smoke` does a real branch→commit→PR round-trip and verifies the PR
+    landed; **FEAT-1** full LLM transcripts at the single `run_llm` chokepoint
+    (`runtime/logs/transcripts/<run_id>.txt`, zero extra tokens, argv/secrets never logged);
+    **FEAT-2** daily `MaxAgencyLogCleanup` task prunes logs past a retention window (default 7d).
 - **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1` that **implements
   the `SETUP.md` checklist** (created/maintained incrementally from Phase 2C on — setup
   requirements are captured the moment each phase surfaces them, not reconstructed here).
@@ -247,4 +256,8 @@ PRs, CI, human board. Cross-vendor review preserved (mimo/GPT build → Claude C
 - **2C–2E:** each LLM invoked only for its state; one invocation per issue; stuck-recovery
   reclaims/retries to cap then `needs-human`; kill mid-dispatch → next tick recovers.
 - **2F:** with old pollers off, a full new-idea→merge cycle completes with no double-dispatch/orphan.
+- **Soak-hardening:** 170 unit tests green; marker comments render non-blank; an approved
+  kickoff expands same-tick; `check_model coder --smoke` fails when no PR is opened; a
+  transcript lands at `runtime/logs/transcripts/<run_id>.txt` with no secrets; `clean-logs.ps1`
+  removes only files past the retention window.
 - **Phase 3:** clean machine → `setup.ps1` → open issue + `AI` → merged PR, no manual label fixing.

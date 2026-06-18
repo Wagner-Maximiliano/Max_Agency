@@ -4,7 +4,16 @@ The gate is the single deterministic entry point that replaces the old polling d
 See the roadmap (`Simplification & Reliability Roadmap v3`) for the full design. This
 directory is being built **one phase at a time, beside the old system**.
 
-## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅ + 2F ✅ (next: Phase 3 onboarding)
+## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅ + 2F ✅ + soak-hardening ✅ (next: Phase 3 onboarding)
+
+**Soak-test backlog (2026-06-18)** — three bugs + two features from the first live soak test,
+all shipped (170 unit tests): **BUG-2** marker comments now carry a visible stub line (were
+blank HTML-only comments); **BUG-1** an approved kickoff is expanded in the *same* tick it's
+created (no idle wait); **BUG-3** `check_model coder --smoke` runs a real branch→commit→PR
+round-trip and verifies the PR actually landed (a clean exit with no PR is the failure the
+ping missed); **FEAT-1** full LLM transcript logging at the single `run_llm` chokepoint
+(`runtime/logs/transcripts/<run_id>.txt`, zero extra tokens, secrets never logged); **FEAT-2**
+a daily `MaxAgencyLogCleanup` task prunes logs past a retention window (default 7 days).
 
 **2F — cutover:** the old polling system is **retired**. The WSL hermes tick timers and the
 Claude Code routine are gone; the gate is the single scheduled job, registered as a Windows
@@ -114,7 +123,12 @@ write power.
 - `harness.py` — LLM harnesses: pure prompt/command/verdict-parse for triage (2C), the coder
   command (2D), and the architect + CTO commands/parsers (2E) + a thin LLM runner with the
   **mandatory hard subprocess timeout** and a neutral-`cwd` option for tool-using harnesses.
-- `gate.py` — runner: lock, `gh` reads, marker/approval parsing, classify, execute, JSONL log.
+  Also the **transcript writer** (FEAT-1): `run_llm`'s optional `transcript=` records the
+  prompt + raw reply per call; the argv (with the coder's env-source prefix) is never logged.
+- `check_model.py` — per-role model self-test (`python gate/check_model.py <role>`); a ping by
+  default, or `coder --smoke --repo owner/repo` for the full agentic round-trip (FEAT-1 BUG-3).
+- `gate.py` — runner: lock, `gh` reads, marker/approval parsing, classify, execute, JSONL log,
+  + per-run LLM transcripts (`runtime/logs/transcripts/<run_id>.txt`).
 - `bench/` — Phase 0 model benchmark harness (see below).
 - `tests/` — `pytest` suite (state table, worked examples, parsing, planner/writer, triage,
   smoke tests).
