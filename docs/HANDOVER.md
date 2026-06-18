@@ -418,6 +418,16 @@ this bug exposes.
   removes the dependency on the weakest model capability, works for **any** coder model,
   and fixes the architectural inconsistency. Keep it idempotent (don't create a second PR if
   one already exists) and fail-safe (branch pushed but zero commits ahead → no PR, log it).
+  **CRITICAL ORDERING — open-PR must run BEFORE re-dispatch in the recovery path.** Today's
+  recovery is "in-progress + no open PR + stale marker → re-dispatch (attempt++)". Lever 2
+  must slot in *ahead* of that: "in-progress + no open PR + stale marker → **IF the latest
+  attempt's branch (`max-agency/issue-<N>/attempt-<k>`, k from the marker) exists with
+  commits ahead → open the PR for it; ELSE re-dispatch (attempt++)**". Without this ordering
+  the gate will spawn a fresh attempt and orphan a perfectly good pushed branch instead of
+  surfacing it. (Live example to validate against: `Surviving_The_AI_World` #61 has a
+  known-good `attempt-2` branch with no PR, the issue is `in-progress`, and the scheduled
+  task is disabled — re-enabling after this fix should open the PR for that exact branch on
+  the first tick, with no re-dispatch.)
 
 **Files:** `gate/harness.py` (Lever 1 prompt), `gate/gate.py` + `gate/executor.py`
 (Lever 2 detect-and-create). Unit-test both (mock `gh`); validate live on a throwaway repo.
