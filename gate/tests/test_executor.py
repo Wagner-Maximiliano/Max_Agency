@@ -1,7 +1,8 @@
 """Phase 2B: mutation planner (pure) + gh writer argv construction."""
 
+import gate
 from classifier import Decision, IssueContext, classify
-from executor import GitHubWriter, plan_actions
+from executor import MARKER_STUB, GitHubWriter, plan_actions, render_marker
 
 RUN = "2026-06-14T00:00:00Z-test"
 SCOPE = "AI-GATE-TEST"
@@ -9,6 +10,20 @@ SCOPE = "AI-GATE-TEST"
 
 def dec(num, action, state="s", reason="r", llm=None):
     return Decision(num, state, action, reason, llm)
+
+
+# ── BUG-2: marker comments are non-blank on GitHub but still machine-parseable ──
+def test_render_marker_has_visible_stub_and_still_parses():
+    fields = {"run_id": "r1", "issue": 9, "status": "started", "ts": "2026-06-18T00:00:00Z"}
+    body = render_marker(fields)
+    # a human sees a visible line, not an empty (HTML-only) comment
+    assert body.startswith(MARKER_STUB)
+    assert not body.lstrip().startswith("<!--")
+    # the machine state survives the round-trip unchanged
+    parsed = gate.parse_marker(body)
+    assert parsed == {k: str(v) for k, v in fields.items()}
+    # the stub line is not mistaken for a marker field
+    assert "do" not in parsed and "edit" not in parsed
 
 
 # ── planner: deterministic actions produce the right ops ──────────────────────

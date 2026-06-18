@@ -44,9 +44,18 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# A short visible stub prepended to every marker comment body. A marker is otherwise a
+# single HTML comment (`<!-- … -->`), which GitHub renders as completely invisible — the
+# comment looks blank to any human reading the issue (BUG-2, seen on Surviving_The_AI_World
+# #60). The stub makes the comment non-blank; the HTML block below it is still the machine
+# state (parse_marker keys off the token, and this line has no `key: value` shape so it is
+# never mistaken for a field).
+MARKER_STUB = "_Max Agency gate marker — do not edit._"
+
+
 def render_marker(fields: dict) -> str:
     lines = "\n".join(f"{k}: {v}" for k, v in fields.items())
-    return f"<!-- {MARKER_TOKEN}\n{lines}\n-->"
+    return f"{MARKER_STUB}\n\n<!-- {MARKER_TOKEN}\n{lines}\n-->"
 
 
 def plan_actions(decision: Decision, ctx: IssueContext, run_id: str,
