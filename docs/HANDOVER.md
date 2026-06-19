@@ -453,6 +453,45 @@ turned into a PR by hand (`gh pr create`) to unblock the CTO leg in the meantime
 
 ---
 
+### BUG-5 — No human-initiated "bounce coder PR back" path from `needs-human`
+
+**Symptom:** When a coder PR is held at `needs-human` (e.g. CTO returned `APPROVE_MERGE`
+but `HUMAN-REVIEW: YES`, or CI is red), there is no human-friendly way to say "reject this
+work, send it back to the coder with feedback." A `CHANGES:` comment on the issue is
+silently ignored — the gate classifies every `needs-human` issue as
+`no-action, waiting for human` regardless of comments. The only path is manual label
+surgery: close the PR + remove `needs-human` + add `ready`. Discovered during soak test on
+`Surviving_The_AI_World` #61 (2026-06-19): CTO returned `APPROVE_MERGE` +
+`HUMAN-REVIEW: YES` with broken-link nits; owner wanted to bounce the PR back to the coder
+with feedback but had no gate-native way to do it.
+
+**Root cause:** The architect lane has a human `CHANGES:` path (`plan-ready` → architect
+revises). The coder lane's bounce is **CTO-initiated only** (`REQUEST_CHANGES` verdict →
+gate closes PR + re-dispatches). There is no equivalent human-initiated path. The
+`needs-human` classifier branch is an unconditional dead stop: no comment parsing, no
+`CHANGES:` check, no label inspection beyond the label itself.
+
+**Fix:** Add a human `CHANGES:` path for `needs-human` issues that have an open coder PR.
+When the gate sees `needs-human` + an owner `CHANGES:` comment + open linked PR → close the
+PR + remove `needs-human` + add `role:coder`+`ready` + carry the `CHANGES:` feedback
+forward as context for the next dispatch (into the issue or the marker). Routing rule:
+
+> `needs-human` + owner `CHANGES:` comment + open linked PR
+> → `would-bounce-coder` → close PR + re-queue as `role:coder`+`ready`, attempt++
+
+Keep the unconditional dead-stop for `needs-human` *without* a `CHANGES:` comment.
+
+**Files:** `gate/classifier.py` (new `needs-human` sub-branch), `gate/executor.py`
+(`plan_bounce_coder_ops`), `gate/gate.py` (wire it up). Unit-test; validate live.
+
+**Workaround (manual bounce — use now to continue the soak test):**
+1. Close PR #63 on GitHub.
+2. On issue #61: remove `needs-human`, keep `role:coder` + `AI`, add `ready`.
+3. Add a comment with the feedback (broken markdown links) so the coder reads it.
+4. Run a gate tick — sees `role:coder`+`ready`, no active marker → dispatches attempt 3.
+
+---
+
 ## 11. Soak test — enhancements ✅ BOTH BUILT (2026-06-18)
 
 Enhancements requested during the soak test. **Both shipped 2026-06-18** (commits `991aada`
