@@ -649,6 +649,36 @@ manual gap hit repeatedly in the soak test.
 
 ---
 
+### BUG-9 — Gate tracks a CLOSED PR when an issue has several (open PR hidden from the CTO)
+
+**Symptom:** After an issue goes through one or more bounce/recovery cycles it accumulates
+multiple PRs (one per attempt). The gate then fails to route the *open* PR to the CTO — a
+tick just logs `in-progress → no-action → active marker not stale`, the CTO never reviews,
+and the issue is stuck even though a green, mergeable PR exists. Live on
+`Surviving_The_AI_World` #61 (2026-06-20): PRs #63/#64/#65 (CLOSED) + #66 (OPEN, green) all
+on `max-agency/issue-61/attempt-*` branches; the gate saw a closed one and never reviewed #66.
+
+**Root cause:** `build_pr_map` in `gate/gate.py` (~line 394) maps issue number → PR with a
+plain `out[num] = {...}` for every PR, so when several PRs map to the same issue **the last
+one in the list wins**. `gh pr list --state all` returns newest-first (#66, #65, #64, #63),
+so the loop ends on the oldest **closed** PR (#63) and overwrites the open one. Downstream,
+`build_context` sets `linked_pr_open=False`, so the classifier's "PR open → route to CTO"
+branch never fires and it falls through to "active marker not stale → no-action".
+
+**Fix:** make `build_pr_map` **prefer the OPEN PR** when an issue has several. Simplest:
+don't overwrite an already-recorded OPEN entry with a CLOSED one — e.g. only replace if the
+new PR is OPEN or no entry exists yet; among multiple OPEN PRs (shouldn't happen, but be
+safe) keep the highest number (newest). One-line-ish change in `build_pr_map`; add a unit
+test with a mix of CLOSED + OPEN PRs for the same issue asserting the OPEN one is mapped.
+
+**Files:** `gate/gate.py` (`build_pr_map`). Unit-test (multiple PRs per issue, open wins).
+
+**Interim workaround:** none needed for a one-off — just merge the green PR by hand (the CTO
+already approved equivalent content on the earlier PR). The bug only bites issues that went
+through a bounce/retry cycle, so it will recur until fixed.
+
+---
+
 ## 11. Soak test — enhancements ✅ BOTH BUILT (2026-06-18)
 
 Enhancements requested during the soak test. **Both shipped 2026-06-18** (commits `991aada`
