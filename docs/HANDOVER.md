@@ -529,6 +529,48 @@ idempotent via the `kickoff_created` marker check, so only the `CHANGES:` path n
 
 ---
 
+### BUG-7 — Coder never receives bounce feedback or project style rules (only reads the issue body)
+
+**Symptom:** When a coder PR is bounced (CTO `REQUEST_CHANGES`, or the BUG-5 human bounce)
+the re-dispatched coder repeats the same mistakes, because the feedback never reaches it.
+Live on `Surviving_The_AI_World` #61 (2026-06-19): after banning em dashes in `bible/STYLE.md`
++ a CI rule, the issue was bounced with a `CHANGES:`/comment saying "no em dashes." The next
+coder (`openrouter/owl-alpha`) produced 14 fresh em dashes (PR #65) and failed CI again. The
+bounce loop **cannot converge** — every attempt re-makes the rejected mistake.
+
+**Root cause (two compounding gaps):**
+1. **Feedback lives in comments; the coder reads only the issue body.** `harness.build_coder_command`
+   instructs "Read the issue body (via gh) for the full brief." Owner/CTO feedback is posted as
+   *comments*, which the coder never fetches. So `CHANGES:` text, CTO `REQUEST_CHANGES` rationale,
+   and human notes are all invisible to the re-dispatch.
+2. **The coder is never pointed at the repo's style authority.** The dispatch prompt doesn't tell
+   the coder to read/follow `bible/STYLE.md` (or any `CONTRIBUTING`/style guide), so project rules
+   (e.g. "no em dashes") don't reach it even on the *first* attempt — only the CI backstop catches
+   the violation, with nothing closing the loop.
+
+**Fix (design — needs owner approval, gate core):**
+- **Carry feedback into the dispatch.** On a bounce, the gate should inject the latest
+  `CHANGES:`/CTO-`REQUEST_CHANGES` text into what the coder actually reads — either appended to the
+  dispatch prompt (`build_coder_command` gains a `feedback` arg) or written into the issue body /
+  a dedicated marker the prompt tells the coder to read. Mirrors how the architect already gets
+  `CHANGES:` feedback on revision (that path works; the coder path doesn't).
+- **Point the coder at the style authority.** Add to the coder prompt: "follow the repo's style
+  rules in `bible/STYLE.md` / `CONTRIBUTING.md` if present." Project-agnostic phrasing so it isn't
+  book-specific.
+- Note: a capable model still may not comply 100%; the CI rule remains the backstop, but with
+  feedback delivered the loop can actually converge.
+
+**Files:** `gate/harness.py` (`build_coder_command` feedback arg + style-guide pointer),
+`gate/gate.py`/`gate/executor.py` (pass the bounce feedback through on re-dispatch). Unit-test;
+validate live.
+
+**Observation (not a bug):** `openrouter/owl-alpha` **opened its own PR** (no Lever-2 fallback
+needed) and wrote a proper PR summary — materially better agentic behaviour than
+`deepseek/deepseek-v4-flash`, which never opened its own PR. Model choice matters; owl-alpha is a
+better coder, it just wasn't *told* the style rule.
+
+---
+
 ## 11. Soak test — enhancements ✅ BOTH BUILT (2026-06-18)
 
 Enhancements requested during the soak test. **Both shipped 2026-06-18** (commits `991aada`
