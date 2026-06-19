@@ -79,8 +79,8 @@ with no manual label-fixing and no babysitting.
   specs → the gate creates coder task issues (no-dep `ready`, dep `backlog` + `Depends-on:`
   resolved to real numbers), `expanding` marker before any create (idempotent), then marks
   the kickoff `expanded` + closes it. The full idea→merge chain now connects end to end.
-- **187 gate unit tests passing** (138 through kickoff-expansion + 49 from the soak-test
-  backlog — BUG-1/2/3/4/5 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
+- **190 gate unit tests passing** (138 through kickoff-expansion + 52 from the soak-test
+  backlog — BUG-1..6 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
   throwaway repo (test issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
   must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
   caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
@@ -287,13 +287,14 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs (BUG-1/2/3/4/5 ✅ ALL FIXED)
+## 10. Soak test — known bugs (BUG-1..6 ✅ ALL FIXED)
 
 Bugs found during the live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
-(2026-06-18/19). **All five fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
-BUG-4 `7f4eec5`; BUG-5 `3dbb25a`, on `claude/epic-faraday-5cbhk1`); owner elected "skip live,
-just push" so they were shipped on the unit suite (**187 tests green**), to be exercised by
-the running soak test. The spec for each is kept below as the record. Two design decisions resolved
+(2026-06-18/19). **All six fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
+BUG-4 `7f4eec5`; BUG-5 `3dbb25a`; BUG-6 `74030b2`, on `claude/epic-faraday-5cbhk1`); owner
+elected "skip live, just push" so they were shipped on the unit suite (**190 tests green**),
+to be exercised by the running soak test. (BUG-6 was found while fixing BUG-5 — the architect
+lane had the same stale-`CHANGES:` loop.) The spec for each is kept below as the record. Two design decisions resolved
 explicitly: see BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/`
 log root).
 
@@ -501,6 +502,30 @@ Keep the unconditional dead-stop for `needs-human` *without* a `CHANGES:` commen
 2. On issue #61: remove `needs-human`, keep `role:coder` + `AI`, add `ready`.
 3. Add a comment with the feedback (broken markdown links) so the coder reads it.
 4. Run a gate tick — sees `role:coder`+`ready`, no active marker → dispatches attempt 3.
+
+---
+
+### BUG-6 — Architect `plan-ready` CHANGES: loop (regenerates the plan forever) ✅ FIXED (`74030b2`)
+
+**Symptom:** The architect's human `CHANGES:` path re-fires indefinitely. Owner posts
+`CHANGES:` on a `plan-ready` issue → `would-reopen-architect` → architect revises and
+re-posts the plan (`plan-ready` again). But the same stale `CHANGES:` comment is still the
+latest owner approval, so the next time the issue is `plan-ready` it reopens the architect
+*again*, regenerating the plan roughly every other tick until the owner posts a newer comment.
+Wasteful (a Claude call + a new plan comment each cycle) and confusing. Found while fixing
+BUG-5 (the coder bounce had the identical pattern; the coder version is worse — it re-closes a
+freshly-built PR each cycle).
+
+**Root cause:** the `plan-ready` + `CHANGES:` classifier branch checked only `ctx.approval ==
+"changes"`, with no recency guard — identical to the pre-fix BUG-5 `needs-human` branch.
+
+**Fix:** reuse the BUG-5 `changes_fresh` guard. `would-reopen-architect` now requires the
+`CHANGES:` comment to be *newer than the last gate marker* (the architect's `plan-generated`
+marker is written on every revision, so once it revises, the old `CHANGES:` is stale). After a
+revision the owner must respond to the new plan (`APPROVE` or a fresh `CHANGES:`) to advance.
+One-line classifier change (`gate/classifier.py`), no new field (reuses `changes_fresh`); 3
+unit tests (classifier stale/fresh + gate end-to-end). The `APPROVE` path was already
+idempotent via the `kickoff_created` marker check, so only the `CHANGES:` path needed it.
 
 ---
 

@@ -204,10 +204,12 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     `TemporaryDirectory(ignore_cleanup_errors=True)` (wsl left the dir busy on Windows → an
     `unexpected` crash) and per-issue try/except in the main loop (one bad issue no longer
     aborts the tick). **Old code kept in git history (reversible).**
-  - **Soak-test hardening** (live soak on `Surviving_The_AI_World`) ✅ **DONE — 187 unit
-    tests, 2026-06-18/19.** Five bugs + two features: **BUG-5** an owner `CHANGES:` on a
+  - **Soak-test hardening** (live soak on `Surviving_The_AI_World`) ✅ **DONE — 190 unit
+    tests, 2026-06-18/19.** Six bugs + two features: **BUG-5** an owner `CHANGES:` on a
     `needs-human`-held coder PR bounces it back to the coder (close PR + re-queue, feedback
-    forward, guarded against re-closing a rebuilt PR on a stale comment); **BUG-2** visible stub on marker comments
+    forward, guarded against re-closing a rebuilt PR on a stale comment); **BUG-6** the same
+    freshness guard stops the architect `plan-ready` `CHANGES:` path looping (regenerating the
+    plan every tick on a stale comment); **BUG-2** visible stub on marker comments
     (were blank HTML-only); **BUG-1** an approved kickoff is expanded in the same tick it's
     created (compound op, standalone expand kept as the idempotent fallback); **BUG-3**
     `check_model coder --smoke` does a real branch→commit→PR round-trip and verifies the PR
@@ -261,11 +263,11 @@ PRs, CI, human board. Cross-vendor review preserved (mimo/GPT build → Claude C
 - **2C–2E:** each LLM invoked only for its state; one invocation per issue; stuck-recovery
   reclaims/retries to cap then `needs-human`; kill mid-dispatch → next tick recovers.
 - **2F:** with old pollers off, a full new-idea→merge cycle completes with no double-dispatch/orphan.
-- **Soak-hardening:** 187 unit tests green; marker comments render non-blank; an approved
+- **Soak-hardening:** 190 unit tests green; marker comments render non-blank; an approved
   kickoff expands same-tick; `check_model coder --smoke` fails when no PR is opened; a stuck
   in-progress issue whose attempt branch is ahead with no PR gets the PR opened by the gate
-  (no re-dispatch); an owner `CHANGES:` on a `needs-human`-held PR bounces it to the coder
-  (once per fresh request, not per CTO cycle); a transcript lands at
-  `runtime/logs/transcripts/<run_id>.txt` with no secrets; `clean-logs.ps1` removes only files
-  past the retention window.
+  (no re-dispatch); an owner `CHANGES:` on a `needs-human`-held PR bounces it to the coder, and
+  on a `plan-ready` issue reopens the architect — both once per fresh request, not every tick;
+  a transcript lands at `runtime/logs/transcripts/<run_id>.txt` with no secrets;
+  `clean-logs.ps1` removes only files past the retention window.
 - **Phase 3:** clean machine → `setup.ps1` → open issue + `AI` → merged PR, no manual label fixing.
