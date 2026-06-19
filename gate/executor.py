@@ -304,6 +304,34 @@ def plan_coder_dispatch_ops(issue_number: int, attempt: int, run_id: str, model:
     ]
 
 
+def plan_bounce_coder_ops(issue_number: int, pr_number: int, attempt: int, run_id: str,
+                          comment_id: str | None, feedback: str = "",
+                          ts: str | None = None) -> list[dict]:
+    """Pure: human-initiated bounce of a held coder PR back to the coder lane (BUG-5).
+
+    The owner posted `CHANGES:` on a `needs-human` issue with an open PR. Mirror the CTO's
+    REQUEST_CHANGES route (the gate owns every mutation): record the bounce + the feedback,
+    close the PR, re-queue as `role:coder`+`ready` (removing `needs-human`), and write a
+    marker. The next dispatch increments the attempt from the marker. Comment first so the
+    feedback is preserved even if a later op fails; `close_pr`/`edit_labels` are the critical
+    state changes (the caller aborts before re-queuing if the PR didn't close).
+    """
+    ts = ts or _now_iso()
+    fb = f"\n\n> {feedback.strip()}" if feedback and feedback.strip() else ""
+    marker = _coder_marker(issue_number, attempt, run_id, "", "bounced", ts)
+    return [
+        {"op": "comment", "issue": issue_number,
+         "body": ("Gate: owner requested **CHANGES** on the held PR — closing it and "
+                  "re-queuing for the coder to revise." + fb)},
+        {"op": "close_pr", "pr": pr_number,
+         "comment": "Closed by gate: owner requested changes; the coder will re-attempt."},
+        {"op": "edit_labels", "issue": issue_number, "add": ["role:coder", "ready"],
+         "remove": ["needs-human"]},
+        {"op": "upsert_marker", "issue": issue_number, "comment_id": comment_id,
+         "body": render_marker(marker)},
+    ]
+
+
 def plan_open_pr_ops(issue_number: int, attempt: int, title: str, branch: str, base: str,
                      run_id: str, comment_id: str | None, ts: str | None = None) -> list[dict]:
     """Pure: open the PR for an already-pushed coder branch (BUG-4 Lever 2).

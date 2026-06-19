@@ -47,6 +47,42 @@ def test_needs_human_waits():
     assert (d.detected_state, d.intended_action) == ("needs-human", "no-action")
 
 
+# ── BUG-5: human-initiated bounce of a held coder PR ──────────────────────────
+def test_needs_human_changes_with_open_pr_bounces_coder():
+    d = classify(ctx(61, ["AI-GATE-TEST", "needs-human"],
+                      approval="changes", linked_pr_open=True, changes_fresh=True))
+    assert (d.detected_state, d.intended_action, d.reason) == (
+        "needs-human", "would-bounce-coder", "owner requested changes on held PR")
+
+
+def test_needs_human_changes_without_pr_stays_dead_stop():
+    # CHANGES: but no open PR -> nothing to bounce -> unchanged dead stop
+    d = classify(ctx(61, ["AI-GATE-TEST", "needs-human"],
+                      approval="changes", changes_fresh=True))
+    assert d.intended_action == "no-action"
+
+
+def test_needs_human_stale_changes_does_not_rebounce():
+    # CHANGES: present + open PR, but already acted on (not fresh) -> no loop
+    d = classify(ctx(61, ["AI-GATE-TEST", "needs-human"],
+                      approval="changes", linked_pr_open=True, changes_fresh=False))
+    assert d.intended_action == "no-action"
+
+
+def test_needs_human_approve_does_not_bounce():
+    # only CHANGES: triggers a bounce; an APPROVE on a held PR is still a human merge
+    d = classify(ctx(61, ["AI-GATE-TEST", "needs-human"],
+                      approval="approve", linked_pr_open=True))
+    assert d.intended_action == "no-action"
+
+
+def test_merged_pr_still_wins_over_needs_human_bounce():
+    d = classify(ctx(61, ["AI-GATE-TEST", "needs-human"],
+                      approval="changes", linked_pr_open=True, changes_fresh=True,
+                      pr_merged=True))
+    assert d.intended_action == "would-close"
+
+
 def test_architect_no_plan():
     d = classify(ctx(4, ["AI-GATE-TEST", "role:architect"]))
     assert d.intended_action == "would-invoke-architect"

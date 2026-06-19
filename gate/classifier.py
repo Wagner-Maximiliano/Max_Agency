@@ -50,6 +50,10 @@ class IssueContext:
     title: str = ""
     # comment id of the existing per-issue marker, if any (for in-place edit)
     marker_comment_id: Optional[str] = None
+    # owner `CHANGES:` comment is newer than the last gate action (marker) — i.e. a *fresh*
+    # request, not one already acted on. Gates the needs-human bounce so it fires once per
+    # new request instead of re-closing every freshly-built PR (BUG-5).
+    changes_fresh: bool = False
 
 
 @dataclass
@@ -82,6 +86,12 @@ def classify(ctx: IssueContext) -> Decision:
 
     # 2. Explicitly parked for a human.
     if "needs-human" in labels:
+        # Human-initiated bounce (BUG-5): an owner `CHANGES:` comment on a *held coder PR*
+        # sends the work back to the coder lane with feedback — the human-side counterpart of
+        # the CTO's REQUEST_CHANGES. Requires an open linked PR (else there's nothing to
+        # bounce); without a CHANGES: comment, needs-human stays an unconditional dead stop.
+        if ctx.approval == "changes" and ctx.linked_pr_open and ctx.changes_fresh:
+            return d("needs-human", "would-bounce-coder", "owner requested changes on held PR")
         return d("needs-human", "no-action", "waiting for human")
 
     # 3. Conflicting role labels → unknown, do nothing (fail safe).

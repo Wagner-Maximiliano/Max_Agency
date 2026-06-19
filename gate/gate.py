@@ -175,6 +175,30 @@ def parse_approval(comments: list[dict]) -> str | None:
     return result
 
 
+def latest_changes_ts(comments: list[dict]) -> str | None:
+    """createdAt of the latest owner/maintainer `CHANGES:` comment, or None."""
+    ts = None
+    for c in comments:
+        body = c.get("body", "") or ""
+        if MARKER_TOKEN in body:
+            continue
+        if (c.get("authorAssociation") or "").upper() not in APPROVAL_AUTHORS:
+            continue
+        if any(line.strip().lower().startswith("changes:") for line in body.splitlines()):
+            ts = c.get("createdAt") or ts
+    return ts
+
+
+def _ts_after(a: str | None, b: str | None) -> bool:
+    """True iff ISO timestamp `a` is strictly after `b` (defensive: bad/missing → False)."""
+    try:
+        da = datetime.fromisoformat(a.replace("Z", "+00:00"))
+        db = datetime.fromisoformat(b.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return False
+    return da > db
+
+
 def latest_changes_feedback(comments: list[dict]) -> str:
     """The text of the latest owner `CHANGES:` comment (fed to the architect on a revision)."""
     feedback = ""
@@ -198,11 +222,20 @@ def build_context(issue: dict, pr_map: dict, closed_numbers: set[int], stuck_min
     num = issue["number"]
     pr = pr_map.get(num)
     deps = parse_depends_on(issue.get("body", "") or "")
+    approval = parse_approval(comments)
+    # A CHANGES: request is "fresh" only if it postdates the last gate action (the marker ts);
+    # this gates the needs-human bounce to once per new request (BUG-5), so a stale CHANGES:
+    # doesn't re-close every freshly-built PR. No marker yet ⇒ any CHANGES: counts as fresh.
+    changes_fresh = (approval == "changes"
+                     and bool(marker_fields)
+                     and _ts_after(latest_changes_ts(comments), marker_fields.get("ts"))) \
+        or (approval == "changes" and not marker_fields)
     return IssueContext(
         number=num,
         labels=labels,
         title=issue.get("title", "") or "",
-        approval=parse_approval(comments),
+        approval=approval,
+        changes_fresh=changes_fresh,
         marker_active=marker_is_active(marker, stuck_min),
         kickoff_created=bool(marker_fields and marker_fields.get("status") == "kickoff-created"),
         kickoff_expanded=bool(marker_fields and
@@ -504,6 +537,12 @@ def main(argv: list[str] | None = None) -> int:
                             log("mutation", issue=decision.number, op=op["op"])
                         except Exception as e:  # one bad write must not halt the board
                             log("mutation-error", issue=decision.number, op=op["op"], detail=repr(e))
+
+                    # Human-initiated coder-PR bounce (BUG-5): deterministic (close PR +
+                    # re-queue), so it runs in any writes-enabled mode, not just dispatch.
+                    if decision.intended_action == "would-bounce-coder":
+                        mutations += bounce_coder(writer, issue, ctx, decision, run_id,
+                                                  args, log, pr_map)
 
                     # Phase 2C–2E LLM-dispatch actions (only in dispatch-enabled mode). Each is
                     # fail-safe: a hung/failed harness is a logged no-op, retried next tick.
@@ -887,6 +926,26 @@ def recover_coder_pr(writer, ctx, decision, run_id, args, log) -> tuple[str, int
         log("recover-indeterminate", issue=n, attempt=attempt, branch=branch)
         return ("skip", 0)
     return ("redispatch", 0)  # missing / no-commits → nothing to open
+
+
+def bounce_coder(writer, issue, ctx, decision, run_id, args, log, pr_map) -> int:
+    """Human-initiated bounce (BUG-5): owner posted `CHANGES:` on a `needs-human` issue with
+    an open coder PR → close the PR and re-queue for the coder, carrying the feedback forward.
+
+    Deterministic (no LLM), but needs the PR number from pr_map, so it runs here rather than
+    in the pure plan_actions. The CHANGES: comment already lives in the issue thread; the gate
+    also restates it in its own bounce comment so it's unambiguous in the record.
+    """
+    n = decision.number
+    pr = pr_map.get(n)
+    if not pr or pr.get("number") is None:
+        log("bounce-no-pr", issue=n)
+        return 0
+    feedback = latest_changes_feedback(issue.get("comments", []) or [])
+    log("coder-bounce", issue=n, pr=pr["number"], attempt=ctx.attempt)
+    ops = executor.plan_bounce_coder_ops(n, pr["number"], ctx.attempt, run_id,
+                                         ctx.marker_comment_id, feedback)
+    return _apply_ops(writer, n, ops, log, critical_ops=("close_pr", "edit_labels"))
 
 
 def escalate_coder(writer, ctx, decision, run_id, args, log) -> int:
