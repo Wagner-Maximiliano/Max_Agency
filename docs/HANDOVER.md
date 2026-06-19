@@ -79,8 +79,8 @@ with no manual label-fixing and no babysitting.
   specs → the gate creates coder task issues (no-dep `ready`, dep `backlog` + `Depends-on:`
   resolved to real numbers), `expanding` marker before any create (idempotent), then marks
   the kickoff `expanded` + closes it. The full idea→merge chain now connects end to end.
-- **176 gate unit tests passing** (138 through kickoff-expansion + 38 from the soak-test
-  backlog — BUG-1/2/3/4 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
+- **187 gate unit tests passing** (138 through kickoff-expansion + 49 from the soak-test
+  backlog — BUG-1/2/3/4/5 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
   throwaway repo (test issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
   must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
   caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
@@ -287,13 +287,13 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs (BUG-1/2/3/4 ✅ ALL FIXED)
+## 10. Soak test — known bugs (BUG-1/2/3/4/5 ✅ ALL FIXED)
 
-Bugs found during the first live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
-(2026-06-18). **All four fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
-BUG-4 `7f4eec5`, on `claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so
-they were shipped on the unit suite (**176 tests green**), to be exercised by the running
-soak test. The spec for each is kept below as the record. Two design decisions resolved
+Bugs found during the live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
+(2026-06-18/19). **All five fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
+BUG-4 `7f4eec5`; BUG-5 `3dbb25a`, on `claude/epic-faraday-5cbhk1`); owner elected "skip live,
+just push" so they were shipped on the unit suite (**187 tests green**), to be exercised by
+the running soak test. The spec for each is kept below as the record. Two design decisions resolved
 explicitly: see BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/`
 log root).
 
@@ -453,7 +453,19 @@ turned into a PR by hand (`gh pr create`) to unblock the CTO leg in the meantime
 
 ---
 
-### BUG-5 — No human-initiated "bounce coder PR back" path from `needs-human`
+### BUG-5 — No human-initiated "bounce coder PR back" path from `needs-human` ✅ FIXED (`3dbb25a`)
+
+**Resolution:** added the `would-bounce-coder` route exactly as specified — `needs-human` +
+owner `CHANGES:` comment + open linked PR → the gate closes the PR, re-queues
+`role:coder`+`ready` (removing `needs-human`), carries the `CHANGES:` feedback into its bounce
+comment, and the next dispatch increments the attempt. Deterministic (no LLM; runs in
+deterministic-only mode too) and mirrors the CTO `REQUEST_CHANGES` route (the gate owns every
+mutation). `needs-human` without a `CHANGES:` comment stays an unconditional dead stop.
+**Added beyond the spec — a loop guard:** the bounce only fires when the `CHANGES:` comment is
+*newer* than the last gate marker (new `changes_fresh` context field, comment `createdAt` vs
+marker `ts`); without it a stale `CHANGES:` would re-close every freshly-built PR each CTO
+cycle. New `executor.plan_bounce_coder_ops` + `gate.bounce_coder`/`latest_changes_ts`; 11 unit
+tests. Spec retained below.
 
 **Symptom:** When a coder PR is held at `needs-human` (e.g. CTO returned `APPROVE_MERGE`
 but `HUMAN-REVIEW: YES`, or CI is red), there is no human-friendly way to say "reject this

@@ -6,8 +6,10 @@ directory is being built **one phase at a time, beside the old system**.
 
 ## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅ + 2F ✅ + soak-hardening ✅ (next: Phase 3 onboarding)
 
-**Soak-test backlog (2026-06-18)** — four bugs + two features from the first live soak test,
-all shipped (176 unit tests): **BUG-2** marker comments now carry a visible stub line (were
+**Soak-test backlog (2026-06-18/19)** — five bugs + two features from the live soak test,
+all shipped (187 unit tests): **BUG-5** an owner `CHANGES:` comment on a `needs-human`-held
+coder PR now bounces it back to the coder (close PR + re-queue `role:coder`+`ready`, feedback
+carried forward; guarded so a stale comment can't re-close every rebuilt PR); **BUG-2** marker comments now carry a visible stub line (were
 blank HTML-only comments); **BUG-1** an approved kickoff is expanded in the *same* tick it's
 created (no idle wait); **BUG-3** `check_model coder --smoke` runs a real branch→commit→PR
 round-trip and verifies the PR actually landed (a clean exit with no PR is the failure the
