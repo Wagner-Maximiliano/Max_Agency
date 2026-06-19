@@ -582,6 +582,52 @@ better coder, it just wasn't *told* the style rule.
 
 ---
 
+### BUG-8 — CI-failure → coder feedback loop (auto-fix red CI before the CTO reviews)
+
+**Type:** enhancement (numbered BUG-8 to keep the soak-test tracking continuous). **Builds
+directly on BUG-7** (the coder feedback channel) — do BUG-7 first (already done).
+
+**Motivation:** Repeatedly during the soak test a coder PR opened but **CI was red** (em dash,
+ellipsis glyph, lint), and the only path forward was a **manual human bounce**. Two structural
+gaps it exposes:
+1. The gate routes an open coder PR straight to the CTO **without checking CI** — so the CTO
+   reviews and even `APPROVE_MERGE`s CI-red PRs (then holds for human under `--no-auto-merge`).
+   CI status should gate the review, not be discovered inside it.
+2. There is no autonomous "fix the CI failure" step — red CI = dead end until a human intervenes.
+
+**Design — a CI-feedback loop to the CODER, NOT a CTO that edits code.** (Rejected alt: having
+the CTO investigate + fix CI. That collapses author and reviewer into one role and destroys the
+independent cross-vendor review that is the whole point — if the CTO fixes the code, nothing
+reviews the CTO's fix. Keep the CTO a pure reviewer that only ever sees green PRs.)
+
+New routing, inserted **before** CTO review:
+
+> coder PR open → **gate checks CI status** →
+> - CI green → route to `role:cto` (today's path)
+> - CI red → pull the **failed job log**, bounce to the **coder** with that log as feedback
+>   (reuse the BUG-7 feedback-into-dispatch channel), attempt++ → coder fixes → re-check
+> - attempts exhausted (`--max-attempts`) → `needs-human`
+
+**Concerns to design around (all manageable):**
+- **Token loops:** a coder that can't fix CI would burn cycles forever → reuse the existing
+  `--max-attempts` cap; exhausted → `needs-human`.
+- **Untrusted + huge logs:** CI log text is data, never instructions (prompt-injection rule);
+  extract only the failing step/job (`gh run view --log-failed`) and **truncate** before passing.
+- **Infra flakiness:** CI fails for non-code reasons (network, runner). Consider **one CI re-run**
+  before spending a coder attempt.
+- **Not all failures are auto-fixable:** lint/format/spelling/typography are great candidates;
+  logic/test failures may not be — the attempt-cap + escalate handles the unfixable case.
+- **Determinism:** the gate already records `ci_green` in the CTO verdict event; promote CI status
+  to a first-class classifier input (a new pre-CTO state) rather than discovering it mid-review.
+
+**Files:** `gate/classifier.py` (new "PR-open + CI-red" pre-CTO state), `gate/gate.py` +
+`gate/harness.py` (fetch+truncate CI log, bounce to coder with it as feedback), `gate/executor.py`
+(routing ops). Unit-test (mock `gh run` + CI states); validate live on a throwaway repo with a
+deliberately CI-failing PR. Aligns with the mission ("let the models work") — closes the last
+manual gap hit repeatedly in the soak test.
+
+---
+
 ## 11. Soak test — enhancements ✅ BOTH BUILT (2026-06-18)
 
 Enhancements requested during the soak test. **Both shipped 2026-06-18** (commits `991aada`
