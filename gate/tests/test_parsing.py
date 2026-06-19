@@ -95,3 +95,38 @@ def test_pr_map_by_branch_prefix():
 def test_pr_map_by_closes_fallback():
     prs = [{"number": 90, "state": "MERGED", "body": "Closes #17", "headRefName": "feature/x"}]
     assert gate.build_pr_map(prs)[17]["state"] == "MERGED"
+
+
+def _pr(number, state, attempt):
+    return {"number": number, "state": state, "body": "",
+            "headRefName": f"max-agency/issue-61/attempt-{attempt}"}
+
+
+def test_pr_map_prefers_open_over_closed():
+    """BUG-9: with several attempt PRs for one issue, the OPEN one wins over CLOSED — even
+    though `gh pr list` is newest-first (so the open #66 is *not* last in the list)."""
+    prs = [_pr(66, "OPEN", 4), _pr(65, "CLOSED", 3), _pr(64, "CLOSED", 2), _pr(63, "CLOSED", 1)]
+    entry = gate.build_pr_map(prs)[61]
+    assert entry["state"] == "OPEN" and entry["number"] == 66
+
+
+def test_pr_map_open_wins_regardless_of_list_order():
+    """Open PR appearing first, last, or middle still wins (order-independent)."""
+    for order in ([_pr(63, "CLOSED", 1), _pr(66, "OPEN", 4)],
+                  [_pr(66, "OPEN", 4), _pr(63, "CLOSED", 1)]):
+        assert gate.build_pr_map(order)[61]["number"] == 66
+
+
+def test_pr_map_merged_beats_closed():
+    prs = [_pr(64, "CLOSED", 2), _pr(63, "MERGED", 1)]
+    assert gate.build_pr_map(prs)[61]["state"] == "MERGED"
+
+
+def test_pr_map_multiple_open_keeps_newest():
+    prs = [_pr(66, "OPEN", 4), _pr(70, "OPEN", 5)]
+    assert gate.build_pr_map(prs)[61]["number"] == 70
+
+
+def test_pr_map_all_closed_keeps_newest():
+    prs = [_pr(63, "CLOSED", 1), _pr(65, "CLOSED", 3), _pr(64, "CLOSED", 2)]
+    assert gate.build_pr_map(prs)[61]["number"] == 65

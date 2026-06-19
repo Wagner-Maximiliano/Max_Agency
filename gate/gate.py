@@ -391,8 +391,27 @@ def parse_depends_on(body: str) -> list[int]:
     return [int(x.strip().lstrip("#")) for x in raw.split(",") if x.strip().lstrip("#").isdigit()]
 
 
+# Issue-PR precedence (BUG-9): an issue accumulates one PR per bounce/recovery attempt, so
+# several can map to the same number. Prefer the OPEN one (it's what the CTO must review),
+# then MERGED (closes the issue), then CLOSED; break ties by newest (highest PR number).
+_PR_STATE_RANK = {"OPEN": 3, "MERGED": 2}
+
+
+def _pr_outranks(new: dict, prev: dict) -> bool:
+    """True if PR `new` should replace the already-mapped `prev` for the same issue (BUG-9)."""
+    nr = _PR_STATE_RANK.get((new.get("state") or "").upper(), 1)
+    pr = _PR_STATE_RANK.get((prev.get("state") or "").upper(), 1)
+    return nr > pr or (nr == pr and (new.get("number") or 0) > (prev.get("number") or 0))
+
+
 def build_pr_map(prs: list[dict]) -> dict:
-    """Map issue number -> {state, number} via head-branch prefix or 'Closes #N'."""
+    """Map issue number -> {state, number, ci} via head-branch prefix or 'Closes #N'.
+
+    When several PRs map to one issue (multiple bounce/recovery attempts), prefer the OPEN PR
+    so the "PR open → route to CTO" branch fires (BUG-9). `gh pr list` is newest-first, so the
+    old last-wins logic ended on the *oldest CLOSED* PR and hid a green open one (live: #61 had
+    #63/#64/#65 CLOSED + #66 OPEN; the gate tracked #63 and never reviewed #66). Precedence:
+    OPEN > MERGED > CLOSED, ties broken by newest PR number — see `_pr_outranks`."""
     out: dict[int, dict] = {}
     for pr in prs:
         num = None
@@ -404,9 +423,12 @@ def build_pr_map(prs: list[dict]) -> dict:
             mb = re.search(r"(?:Closes|Fixes)\s+#(\d+)", pr.get("body", "") or "", re.IGNORECASE)
             if mb:
                 num = int(mb.group(1))
-        if num is not None:
-            out[num] = {"state": pr.get("state", ""), "number": pr.get("number"),
-                        "ci": ci_status(pr.get("statusCheckRollup"))}
+        if num is None:
+            continue
+        entry = {"state": pr.get("state", ""), "number": pr.get("number"),
+                 "ci": ci_status(pr.get("statusCheckRollup"))}
+        if num not in out or _pr_outranks(entry, out[num]):
+            out[num] = entry
     return out
 
 
