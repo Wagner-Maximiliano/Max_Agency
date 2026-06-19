@@ -6,8 +6,10 @@ directory is being built **one phase at a time, beside the old system**.
 
 ## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅ + 2F ✅ + soak-hardening ✅ (next: Phase 3 onboarding)
 
-**Soak-test backlog (2026-06-18/19)** — eight bugs + two features from the live soak test,
-all shipped (218 unit tests): **BUG-8** CI status is a tri-state classifier input
+**Soak-test backlog (2026-06-18/20)** — nine bugs + two features from the live soak test,
+all shipped (223 unit tests): **BUG-9** when an issue has several attempt PRs (after a bounce
+cycle), `build_pr_map` now maps the OPEN one (OPEN > MERGED > CLOSED, ties newest) so a green
+open PR is routed to the CTO instead of being hidden behind an older CLOSED PR; **BUG-8** CI status is a tri-state classifier input
 (green/pending/red) that gates the route to the CTO — a red coder PR is bounced back to the
 coder with the failing CI log as feedback (the CTO only ever reviews green PRs); pending waits;
 the attempt cap then parks `needs-human` with the PR left open; **BUG-7** the coder dispatch now forwards reviewer feedback

@@ -287,13 +287,14 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs (BUG-1..8 ✅ ALL FIXED)
+## 10. Soak test — known bugs (BUG-1..9 ✅ ALL FIXED)
 
 Bugs found during the live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
-(2026-06-18/19). **All eight fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
-BUG-4 `7f4eec5`; BUG-5 `3dbb25a`; BUG-6 `74030b2`; BUG-7 `6c9a49c`; BUG-8 `4d681a1`, on
+(2026-06-18/20). **All nine fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
+BUG-4 `7f4eec5`; BUG-5 `3dbb25a`; BUG-6 `74030b2`; BUG-7 `6c9a49c`; BUG-8 `4d681a1`;
+BUG-9 `c11154b`, on
 `claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so they were shipped on
-the unit suite (**218 tests green**), to be exercised by the running soak test. (BUG-6 was
+the unit suite (**223 tests green**), to be exercised by the running soak test. (BUG-6 was
 found while fixing BUG-5 — the architect lane had the same stale-`CHANGES:` loop.) The spec for each is kept below as the record. Two design decisions resolved
 explicitly: see BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/`
 log root).
@@ -649,7 +650,14 @@ manual gap hit repeatedly in the soak test.
 
 ---
 
-### BUG-9 — Gate tracks a CLOSED PR when an issue has several (open PR hidden from the CTO)
+### BUG-9 — Gate tracks a CLOSED PR when an issue has several (open PR hidden from the CTO) ✅ FIXED (`c11154b`)
+
+**Resolution:** `build_pr_map` (`gate/gate.py`) no longer uses last-wins. When several PRs map
+to one issue it applies a precedence — **OPEN > MERGED > CLOSED, ties broken by newest PR
+number** (`_pr_outranks` helper) — so the green open PR is the one recorded, `linked_pr_open`
+goes True, and the CTO route fires. Order-independent (the open PR wins wherever it sits in the
+newest-first `gh pr list`). 5 unit tests (mixed CLOSED+OPEN, order-independence, MERGED>CLOSED,
+multiple-OPEN→newest, all-CLOSED→newest). Spec retained below.
 
 **Symptom:** After an issue goes through one or more bounce/recovery cycles it accumulates
 multiple PRs (one per attempt). The gate then fails to route the *open* PR to the CTO — a
