@@ -79,8 +79,8 @@ with no manual label-fixing and no babysitting.
   specs → the gate creates coder task issues (no-dep `ready`, dep `backlog` + `Depends-on:`
   resolved to real numbers), `expanding` marker before any create (idempotent), then marks
   the kickoff `expanded` + closes it. The full idea→merge chain now connects end to end.
-- **190 gate unit tests passing** (138 through kickoff-expansion + 52 from the soak-test
-  backlog — BUG-1..6 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
+- **198 gate unit tests passing** (138 through kickoff-expansion + 60 from the soak-test
+  backlog — BUG-1..7 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
   throwaway repo (test issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
   must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
   caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
@@ -287,14 +287,14 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs (BUG-1..6 ✅ ALL FIXED)
+## 10. Soak test — known bugs (BUG-1..7 ✅ ALL FIXED)
 
 Bugs found during the live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
-(2026-06-18/19). **All six fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
-BUG-4 `7f4eec5`; BUG-5 `3dbb25a`; BUG-6 `74030b2`, on `claude/epic-faraday-5cbhk1`); owner
-elected "skip live, just push" so they were shipped on the unit suite (**190 tests green**),
-to be exercised by the running soak test. (BUG-6 was found while fixing BUG-5 — the architect
-lane had the same stale-`CHANGES:` loop.) The spec for each is kept below as the record. Two design decisions resolved
+(2026-06-18/19). **All seven fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
+BUG-4 `7f4eec5`; BUG-5 `3dbb25a`; BUG-6 `74030b2`; BUG-7 `6c9a49c`, on
+`claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so they were shipped on
+the unit suite (**198 tests green**), to be exercised by the running soak test. (BUG-6 was
+found while fixing BUG-5 — the architect lane had the same stale-`CHANGES:` loop.) The spec for each is kept below as the record. Two design decisions resolved
 explicitly: see BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/`
 log root).
 
@@ -529,7 +529,18 @@ idempotent via the `kickoff_created` marker check, so only the `CHANGES:` path n
 
 ---
 
-### BUG-7 — Coder never receives bounce feedback or project style rules (only reads the issue body)
+### BUG-7 — Coder never receives bounce feedback or project style rules (only reads the issue body) ✅ FIXED (`6c9a49c`)
+
+**Resolution (both gaps closed, in the coder dispatch prompt — gate core):** (1) **Style
+pointer, always** — the prompt now tells the coder to read & follow the repo's style guide
+(`bible/STYLE.md` / `STYLE.md` / `CONTRIBUTING.md` / a README style section), project-agnostic,
+so rules reach it on the first attempt. (2) **Feedback forwarding, on re-dispatch** — the gate
+extracts the latest owner `CHANGES:` / CTO `REQUEST_CHANGES` text (`gate.latest_coder_feedback`)
+and injects it into the dispatch prompt (`coder_prompt`/`build_coder_command` gain a `feedback`
+arg; `dispatch_coder` now takes the issue dict to read its comments), framed as untrusted data
+describing required fixes, capped at 4000 chars and single-quoted into the `bash -lc` string (no
+shell escape). Mirrors the architect's revision-feedback path. CI stays the backstop, but the
+loop can now converge. 8 unit tests. Spec retained below.
 
 **Symptom:** When a coder PR is bounced (CTO `REQUEST_CHANGES`, or the BUG-5 human bounce)
 the re-dispatched coder repeats the same mistakes, because the feedback never reaches it.
