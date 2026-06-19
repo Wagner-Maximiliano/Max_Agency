@@ -100,8 +100,15 @@ def test_plan_ready_approve():
 
 
 def test_plan_ready_changes():
-    d = classify(ctx(5, ["AI-GATE-TEST", "plan-ready"], approval="changes"))
+    d = classify(ctx(5, ["AI-GATE-TEST", "plan-ready"], approval="changes", changes_fresh=True))
     assert d.intended_action == "would-reopen-architect"
+
+
+def test_plan_ready_stale_changes_does_not_reopen_architect():
+    # BUG-6: a CHANGES: already acted on (architect revised, newer marker) must not reopen
+    # the architect again — wait for the owner to respond to the revised plan.
+    d = classify(ctx(5, ["AI-GATE-TEST", "plan-ready"], approval="changes", changes_fresh=False))
+    assert d.intended_action == "no-action"
 
 
 def test_kickoff_expands():

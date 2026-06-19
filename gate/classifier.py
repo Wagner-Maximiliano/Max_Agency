@@ -113,7 +113,12 @@ def classify(ctx: IssueContext) -> Decision:
             if ctx.kickoff_created:
                 return d("plan-ready", "no-action", "kickoff already created")
             return d("plan-ready", "would-create-kickoff", "owner approved")
-        if ctx.approval == "changes":
+        # Only a *fresh* CHANGES: reopens the architect (BUG-6): once the architect has
+        # revised and re-posted the plan (a newer marker), the same stale CHANGES: comment
+        # must not reopen it again every other tick — the owner has to respond to the revised
+        # plan (APPROVE or a new CHANGES:) to advance. Same `changes_fresh` guard as the BUG-5
+        # coder bounce.
+        if ctx.approval == "changes" and ctx.changes_fresh:
             return d("plan-ready", "would-reopen-architect", "owner requested changes")
         return d("plan-ready", "no-action", "awaiting approval comment")
 
