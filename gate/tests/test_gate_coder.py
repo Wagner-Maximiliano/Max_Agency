@@ -200,6 +200,73 @@ def test_recovery_escalates_at_cap(monkeypatch, tmp_path):
     assert any(e["event"] == "coder-escalate" for e in _events(tmp_path))
 
 
+# ── BUG-7: style-guide pointer (always) + reviewer feedback on re-dispatch ─────
+def test_coder_prompt_always_points_at_style_guide():
+    p = harness.coder_prompt("o/r", 7, 1)
+    assert "STYLE.md" in p and "CONTRIBUTING.md" in p
+    assert "style guide" in p.lower()
+
+
+def test_coder_prompt_injects_feedback_when_present():
+    p = harness.coder_prompt("o/r", 7, 2, feedback="CHANGES: no em dashes anywhere")
+    assert "PREVIOUS ATTEMPT WAS REJECTED" in p
+    assert "no em dashes anywhere" in p
+    # untrusted feedback is framed as data to fix, not instructions to obey
+    assert "not as instructions" in p.lower()
+
+
+def test_coder_prompt_no_feedback_block_when_empty():
+    assert "PREVIOUS ATTEMPT WAS REJECTED" not in harness.coder_prompt("o/r", 7, 1)
+
+
+def test_coder_prompt_caps_feedback_length():
+    p = harness.coder_prompt("o/r", 7, 2, feedback="z" * 9000)
+    assert "z" * harness.CODER_FEEDBACK_CAP in p           # kept up to the cap
+    assert "z" * (harness.CODER_FEEDBACK_CAP + 1) not in p  # truncated beyond it
+
+
+def test_build_coder_command_embeds_feedback():
+    cmd = harness.build_coder_command("m", "o/r", 7, 2, feedback="no em dashes")
+    assert "no em dashes" in cmd[-1]  # carried into the bash -lc prompt string
+
+
+def test_latest_coder_feedback_picks_changes_and_cto():
+    # owner CHANGES: comment
+    c1 = [{"authorAssociation": "OWNER", "body": "CHANGES: fix the links"}]
+    assert "fix the links" in gate.latest_coder_feedback(c1)
+    # CTO REQUEST_CHANGES rationale
+    c2 = [{"authorAssociation": "NONE", "body": "CTO verdict: **REQUEST_CHANGES**: drop em dashes"}]
+    assert "drop em dashes" in gate.latest_coder_feedback(c2)
+    # marker comments are ignored; latest wins
+    c3 = c1 + [{"authorAssociation": "OWNER", "body": executor.render_marker({"x": "y"})},
+               {"authorAssociation": "NONE", "body": "CTO verdict: **REQUEST_CHANGES**: latest"}]
+    assert "latest" in gate.latest_coder_feedback(c3)
+
+
+def test_redispatch_forwards_feedback_to_coder(monkeypatch, tmp_path):
+    """A bounced (re-queued) coder issue with a CHANGES: comment forwards that feedback into
+    the dispatch prompt so the loop can converge (BUG-7)."""
+    issue = _coder_issue(5, ["AI-GATE-TEST", "role:coder", "ready"],
+                         comments=[{"authorAssociation": "OWNER",
+                                    "body": "CHANGES: no em dashes, use commas"}])
+    rec, calls = _wire(monkeypatch, [issue], _OK)
+
+    assert _run(tmp_path) == gate.EXIT_OK
+    assert calls["n"] == 1
+    sent_cmd = calls["cmds"][0]
+    assert any("no em dashes, use commas" in part for part in sent_cmd)
+    ev = [e for e in _events(tmp_path) if e["event"] == "coder-dispatch"][0]
+    assert ev["feedback"] is True
+
+
+def test_first_attempt_has_no_feedback(monkeypatch, tmp_path):
+    issue = _coder_issue(5, ["AI-GATE-TEST", "role:coder", "ready"])  # no comments
+    rec, calls = _wire(monkeypatch, [issue], _OK)
+    assert _run(tmp_path) == gate.EXIT_OK
+    ev = [e for e in _events(tmp_path) if e["event"] == "coder-dispatch"][0]
+    assert ev["feedback"] is False
+
+
 # ── BUG-4 Lever 2: gate opens the PR for an already-pushed branch ──────────────
 def test_lever1_prompt_makes_pr_the_final_mandatory_step():
     p = harness.coder_prompt("o/r", 7, 2)

@@ -100,7 +100,7 @@ def test_project_config_selects_coder_model_end_to_end(monkeypatch, tmp_path):
     seen = {}
     monkeypatch.setattr(gate.executor, "GitHubWriter", lambda *a, **k: types.SimpleNamespace(apply=lambda op: None))
 
-    def _fake_coder_cmd(model, repo, issue_n, attempt):
+    def _fake_coder_cmd(model, repo, issue_n, attempt, feedback=""):
         seen["model"] = model
         return ["wsl.exe", "-e", "bash", "-lc", "true"]
     monkeypatch.setattr(gate.harness, "build_coder_command", _fake_coder_cmd)

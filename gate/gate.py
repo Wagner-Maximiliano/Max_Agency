@@ -213,6 +213,26 @@ def latest_changes_feedback(comments: list[dict]) -> str:
     return feedback
 
 
+def latest_coder_feedback(comments: list[dict]) -> str:
+    """The most recent reviewer feedback to hand the coder on a re-dispatch (BUG-7): the
+    latest owner `CHANGES:` comment OR CTO `REQUEST_CHANGES` rationale, '' if none. Both
+    bounce paths (CTO REQUEST_CHANGES, the BUG-5 human bounce) leave such a comment in the
+    thread; the coder only reads the issue body, so the gate forwards this into the prompt
+    so the bounce loop can converge. Skips the gate's own marker comments."""
+    feedback = ""
+    for c in comments:
+        body = c.get("body", "") or ""
+        if MARKER_TOKEN in body:
+            continue
+        is_owner = (c.get("authorAssociation") or "").upper() in APPROVAL_AUTHORS
+        is_changes = is_owner and any(
+            line.strip().lower().startswith("changes:") for line in body.splitlines())
+        is_cto_changes = "REQUEST_CHANGES" in body
+        if is_changes or is_cto_changes:
+            feedback = body.strip()
+    return feedback
+
+
 # ── Context assembly ─────────────────────────────────────────────────────────
 def build_context(issue: dict, pr_map: dict, closed_numbers: set[int], stuck_min: int) -> IssueContext:
     labels = {l["name"] for l in issue.get("labels", [])}
@@ -583,15 +603,15 @@ def main(argv: list[str] | None = None) -> int:
                                 elif coder_dispatched:
                                     log("coder-deferred-this-tick", issue=decision.number, action=act)
                                 else:
-                                    mutations += dispatch_coder(writer, ctx, decision, run_id,
-                                                                args, log, "in-progress")
+                                    mutations += dispatch_coder(writer, issue, ctx, decision,
+                                                                run_id, args, log, "in-progress")
                                     coder_dispatched = True
                         elif act == "would-dispatch-coder":
                             if coder_dispatched:
                                 log("coder-deferred-this-tick", issue=decision.number, action=act)
                             else:
-                                mutations += dispatch_coder(writer, ctx, decision, run_id,
-                                                            args, log, "ready")
+                                mutations += dispatch_coder(writer, issue, ctx, decision,
+                                                            run_id, args, log, "ready")
                                 coder_dispatched = True
             except Exception as e:  # fail-safe: isolate this issue, keep the board moving
                 log("issue-error", issue=issue.get("number"), detail=repr(e))
@@ -680,16 +700,21 @@ def _apply_ops(writer, n: int, ops: list[dict], log,
     return mutations
 
 
-def dispatch_coder(writer, ctx, decision, run_id, args, log, from_label) -> int:
+def dispatch_coder(writer, issue, ctx, decision, run_id, args, log, from_label) -> int:
     """Claim a coder issue (label + in-flight marker) then run the coder under a hard timeout.
 
     Fail-safe: a hung/failed coder is a logged outcome, never fatal. No post-run marker
     write — recovery is driven next tick by marker-staleness + PR presence. `from_label`
     is `ready` for a fresh dispatch, `in-progress` for a recovery re-dispatch.
+
+    BUG-7: forward the latest reviewer feedback (owner `CHANGES:` / CTO `REQUEST_CHANGES`,
+    posted as comments the coder never reads) into the dispatch prompt so a bounced coder can
+    actually address it instead of repeating the rejected mistake.
     """
     n = decision.number
     attempt = ctx.attempt + 1  # marker records the new attempt before the blocking run
     model = args.coder_model
+    feedback = latest_coder_feedback(issue.get("comments", []) or [])
 
     # 1. Claim: label move + in-flight marker (label first; abort if the claim fails).
     start_ops = executor.plan_coder_dispatch_ops(
@@ -705,9 +730,9 @@ def dispatch_coder(writer, ctx, decision, run_id, args, log, from_label) -> int:
     #    the translated Windows cwd). Same safeguard the Phase 0 orchestrator got.
     branch = harness.coder_branch(n, attempt)
     log("coder-dispatch", issue=n, attempt=attempt, model=model, branch=branch,
-        timeout_s=args.coder_timeout)
-    cmd = harness.build_coder_command(model, args.repo, n, attempt)
-    sent = harness.coder_prompt(args.repo, n, attempt)  # safe-to-log half (no env prefix)
+        timeout_s=args.coder_timeout, feedback=bool(feedback))
+    cmd = harness.build_coder_command(model, args.repo, n, attempt, feedback)
+    sent = harness.coder_prompt(args.repo, n, attempt, feedback)  # safe-to-log half (no env prefix)
     with tempfile.TemporaryDirectory(prefix="maxagency-coder-", ignore_cleanup_errors=True) as neutral_cwd:
         result = harness.run_llm(cmd, args.coder_timeout, cwd=neutral_cwd,
                                  transcript=_transcript(args, n, "coder", model, sent))
