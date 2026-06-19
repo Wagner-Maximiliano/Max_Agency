@@ -204,8 +204,13 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     `TemporaryDirectory(ignore_cleanup_errors=True)` (wsl left the dir busy on Windows → an
     `unexpected` crash) and per-issue try/except in the main loop (one bad issue no longer
     aborts the tick). **Old code kept in git history (reversible).**
-  - **Soak-test hardening** (live soak on `Surviving_The_AI_World`) ✅ **DONE — 198 unit
-    tests, 2026-06-18/19.** Seven bugs + two features: **BUG-7** the coder dispatch forwards
+  - **Soak-test hardening** (live soak on `Surviving_The_AI_World`) ✅ **DONE — 218 unit
+    tests, 2026-06-18/19.** Eight bugs + two features: **BUG-8** CI status is a first-class
+    tri-state classifier input (green/pending/red) that gates the pre-CTO route — a red coder
+    PR is bounced back to the coder with the failing CI log as feedback (reusing the BUG-7
+    channel) instead of reaching the CTO, who stays a pure reviewer seeing only green PRs;
+    pending waits; attempt cap exhausted parks `needs-human` with the PR left open; **BUG-7**
+    the coder dispatch forwards
     reviewer feedback (owner `CHANGES:` / CTO `REQUEST_CHANGES`) and points at the repo style
     guide so a bounced coder stops repeating the rejected mistake; **BUG-5** an owner `CHANGES:` on a
     `needs-human`-held coder PR bounces it back to the coder (close PR + re-queue, feedback
@@ -265,7 +270,7 @@ PRs, CI, human board. Cross-vendor review preserved (mimo/GPT build → Claude C
 - **2C–2E:** each LLM invoked only for its state; one invocation per issue; stuck-recovery
   reclaims/retries to cap then `needs-human`; kill mid-dispatch → next tick recovers.
 - **2F:** with old pollers off, a full new-idea→merge cycle completes with no double-dispatch/orphan.
-- **Soak-hardening:** 198 unit tests green; marker comments render non-blank; an approved
+- **Soak-hardening:** 218 unit tests green; marker comments render non-blank; an approved
   kickoff expands same-tick; `check_model coder --smoke` fails when no PR is opened; a stuck
   in-progress issue whose attempt branch is ahead with no PR gets the PR opened by the gate
   (no re-dispatch); an owner `CHANGES:` on a `needs-human`-held PR bounces it to the coder, and

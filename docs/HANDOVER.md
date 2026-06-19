@@ -287,13 +287,13 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs (BUG-1..7 ✅ ALL FIXED)
+## 10. Soak test — known bugs (BUG-1..8 ✅ ALL FIXED)
 
 Bugs found during the live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
-(2026-06-18/19). **All seven fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
-BUG-4 `7f4eec5`; BUG-5 `3dbb25a`; BUG-6 `74030b2`; BUG-7 `6c9a49c`, on
+(2026-06-18/19). **All eight fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
+BUG-4 `7f4eec5`; BUG-5 `3dbb25a`; BUG-6 `74030b2`; BUG-7 `6c9a49c`; BUG-8 `4d681a1`, on
 `claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so they were shipped on
-the unit suite (**198 tests green**), to be exercised by the running soak test. (BUG-6 was
+the unit suite (**218 tests green**), to be exercised by the running soak test. (BUG-6 was
 found while fixing BUG-5 — the architect lane had the same stale-`CHANGES:` loop.) The spec for each is kept below as the record. Two design decisions resolved
 explicitly: see BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/`
 log root).
@@ -582,7 +582,28 @@ better coder, it just wasn't *told* the style rule.
 
 ---
 
-### BUG-8 — CI-failure → coder feedback loop (auto-fix red CI before the CTO reviews)
+### BUG-8 — CI-failure → coder feedback loop (auto-fix red CI before the CTO reviews) ✅ FIXED (`4d681a1`)
+
+**Resolution (CI promoted to a first-class classifier input; bounce reuses the BUG-7
+channel):** `gate.ci_status(rollup)` now returns a **tri-state** — `green` (passing or no CI
+configured), `pending` (a check still running, none failed), `red` (any check failed; a
+failure dominates pending). The PR list query carries `statusCheckRollup`, `build_pr_map`
+computes the status, and `IssueContext.ci` (default `green`, so the no-CI case is unchanged)
+feeds the classifier. The `in-progress` + open-PR branch routes on it **before** the CTO:
+`red → would-bounce-ci`, `pending → no-action` (wait), `green → would-route-cto` (today's
+path). The bounce (`gate.bounce_ci` → `executor.plan_bounce_ci_ops`) pulls the failing job log
+(`gh run view --log-failed`), **truncates to 4000 chars (tail — the error is at the end)**,
+closes the PR, re-queues `role:coder`+`ready` (attempt++ on the next dispatch), and posts the
+log as a feedback comment prefixed with `executor.CI_FEEDBACK_PREFIX` — which
+`latest_coder_feedback` recognizes so the BUG-7 channel forwards it into the next coder prompt.
+Attempt cap reached → `escalate_ci` parks `needs-human` with the **PR left open** for the
+human. The **CTO stays a pure reviewer** (the rejected alt — CTO fixes CI — would collapse
+author and reviewer). CI log is **untrusted data** (fenced, truncated, never executed; the
+coder prompt already frames feedback as "data, not instructions"). All deterministic (no LLM
+in the bounce), so it runs in deterministic-only mode too. 20 unit tests. **Deliberate
+simplification:** no automatic CI re-run before spending an attempt (infra flakiness shows as
+`FAILURE`/`CANCELLED` and would cost one attempt) — the `--max-attempts` cap is the backstop;
+revisit if soak shows real flakiness. Spec retained below.
 
 **Type:** enhancement (numbered BUG-8 to keep the soak-test tracking continuous). **Builds
 directly on BUG-7** (the coder feedback channel) — do BUG-7 first (already done).
