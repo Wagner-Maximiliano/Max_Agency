@@ -54,6 +54,11 @@ class IssueContext:
     # request, not one already acted on. Gates the needs-human bounce so it fires once per
     # new request instead of re-closing every freshly-built PR (BUG-5).
     changes_fresh: bool = False
+    # tri-state CI rollup on the linked coder PR: "green" (passing or no CI), "pending"
+    # (still running), "red" (a check failed). Gates the pre-CTO routing (BUG-8): a red PR
+    # bounces back to the coder before the CTO ever reviews it; pending waits. Default
+    # "green" keeps the no-CI case routing straight to review (today's behavior).
+    ci: str = "green"
 
 
 @dataclass
@@ -139,10 +144,18 @@ def classify(ctx: IssueContext) -> Decision:
                 return d("ready", "no-action", "active marker present")
             return d("ready", "would-dispatch-coder", "no active marker", llm="coder")
         if "in-progress" in labels:
-            # An open PR means the coder succeeded — route to review now, regardless of
-            # marker freshness (else a just-built PR waits out STUCK_MIN before review).
+            # An open PR means the coder succeeded — but CI gates the review (BUG-8). The CTO
+            # must only ever see green PRs (it is a pure reviewer; if it had to fix red CI it
+            # would be reviewing its own work). So: red → bounce to the coder with the failure
+            # log (attempt cap applied in the runner); pending → wait for CI to settle; green
+            # (or no CI) → route to review. Route regardless of marker freshness (else a
+            # just-built PR waits out STUCK_MIN before review).
             if ctx.linked_pr_open:
-                return d("in-progress", "would-route-cto", "coder PR open, route to review")
+                if ctx.ci == "red":
+                    return d("in-progress", "would-bounce-ci", "coder PR open but CI is red")
+                if ctx.ci == "pending":
+                    return d("in-progress", "no-action", "coder PR open, CI still running")
+                return d("in-progress", "would-route-cto", "coder PR open + CI green, route to review")
             if ctx.marker_active:
                 return d("in-progress", "no-action", "active marker not stale")
             return d("in-progress", "would-recover", "no active marker and no PR")

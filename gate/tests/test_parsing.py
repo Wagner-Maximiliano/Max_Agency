@@ -89,7 +89,7 @@ def test_depends_on_parsing():
 
 def test_pr_map_by_branch_prefix():
     prs = [{"number": 88, "state": "OPEN", "body": "", "headRefName": "max-agency/issue-42/attempt-1"}]
-    assert gate.build_pr_map(prs)[42] == {"state": "OPEN", "number": 88}
+    assert gate.build_pr_map(prs)[42] == {"state": "OPEN", "number": 88, "ci": "green"}
 
 
 def test_pr_map_by_closes_fallback():

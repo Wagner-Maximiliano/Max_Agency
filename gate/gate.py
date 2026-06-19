@@ -95,18 +95,59 @@ def gh_text(args: list[str]) -> str:
     return out.stdout or ""
 
 
-def ci_is_green(rollup: list | None) -> bool:
-    """True if the PR's statusCheckRollup has no failing/pending checks (empty = no CI)."""
+def ci_status(rollup: list | None) -> str:
+    """Tri-state CI rollup (BUG-8): 'red' (any check failed/errored), 'pending' (any still
+    running, none failed), else 'green' (all passed, or no CI configured). A failure anywhere
+    dominates pending — a red build bounces to the coder regardless of other in-flight checks.
+    Routed on BEFORE the CTO sees the PR: red → bounce, pending → wait, green → review."""
+    pending = False
     for c in rollup or []:
         state = (c.get("state") or "").upper()
         status = (c.get("status") or "").upper()
         concl = (c.get("conclusion") or "").upper()
         if state in ("FAILURE", "ERROR") or concl in (
                 "FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE"):
-            return False
+            return "red"
         if state == "PENDING" or status in ("IN_PROGRESS", "QUEUED", "PENDING", "WAITING"):
-            return False
-    return True
+            pending = True
+    return "pending" if pending else "green"
+
+
+def ci_is_green(rollup: list | None) -> bool:
+    """True if the PR's statusCheckRollup has no failing/pending checks (empty = no CI)."""
+    return ci_status(rollup) == "green"
+
+
+# Bound the untrusted CI log injected into the bounce comment + coder prompt (BUG-8). Matched
+# to harness.CODER_FEEDBACK_CAP so the comment isn't padded beyond what the coder prompt keeps.
+CI_LOG_CAP = 4000
+
+
+def fetch_failed_ci_log(repo: str, branch: str, log, cap: int = CI_LOG_CAP) -> str:
+    """Best-effort: the failing-job log of the latest CI run for `branch`, truncated to `cap`.
+
+    UNTRUSTED data (never executed — only embedded as fenced text the coder treats as a fix
+    description). Returns '' on any error or if no run is found, so a CI bounce still proceeds
+    (the bounce comment then just states CI is red without the log). Keeps only the *tail* —
+    the failing assertion / error summary is almost always at the end of a job log."""
+    try:
+        runs = gh_json(["run", "list", "--repo", repo, "--branch", branch,
+                        "--json", "databaseId,conclusion", "--limit", "1"]) or []
+    except GhError as e:
+        log("ci-log-list-error", branch=branch, detail=str(e)[:200])
+        return ""
+    if not runs or runs[0].get("databaseId") is None:
+        return ""
+    run_db_id = runs[0]["databaseId"]
+    try:
+        out = gh_text(["run", "view", str(run_db_id), "--repo", repo, "--log-failed"])
+    except GhError as e:
+        log("ci-log-view-error", branch=branch, run=run_db_id, detail=str(e)[:200])
+        return ""
+    out = (out or "").strip()
+    if len(out) > cap:
+        out = "...(truncated)\n" + out[-cap:]
+    return out
 
 
 # ── Marker + approval parsing ────────────────────────────────────────────────
@@ -228,7 +269,10 @@ def latest_coder_feedback(comments: list[dict]) -> str:
         is_changes = is_owner and any(
             line.strip().lower().startswith("changes:") for line in body.splitlines())
         is_cto_changes = "REQUEST_CHANGES" in body
-        if is_changes or is_cto_changes:
+        # BUG-8: the gate's own CI-failure bounce comment carries the failing CI log; forward
+        # it to the coder too (it is the actionable feedback for a CI-red re-attempt).
+        is_ci_feedback = body.startswith(executor.CI_FEEDBACK_PREFIX)
+        if is_changes or is_cto_changes or is_ci_feedback:
             feedback = body.strip()
     return feedback
 
@@ -264,6 +308,7 @@ def build_context(issue: dict, pr_map: dict, closed_numbers: set[int], stuck_min
         marker_comment_id=marker_comment_id,
         linked_pr_open=bool(pr and pr["state"] == "OPEN"),
         pr_merged=bool(pr and pr["state"] == "MERGED"),
+        ci=(pr or {}).get("ci", "green"),
         deps_closed=bool(deps) and all(d in closed_numbers for d in deps),
         cto_verdict_present=any(
             re.match(r"\s*(APPROVE_MERGE|REQUEST_CHANGES|ESCALATE_HUMAN|REJECT_CLOSE)\b",
@@ -360,7 +405,8 @@ def build_pr_map(prs: list[dict]) -> dict:
             if mb:
                 num = int(mb.group(1))
         if num is not None:
-            out[num] = {"state": pr.get("state", ""), "number": pr.get("number")}
+            out[num] = {"state": pr.get("state", ""), "number": pr.get("number"),
+                        "ci": ci_status(pr.get("statusCheckRollup"))}
     return out
 
 
@@ -504,7 +550,8 @@ def main(argv: list[str] | None = None) -> int:
                               "--state", "open", "--json", "number,title,labels,body,comments",
                               "--limit", "100"]) or []
             prs = gh_json(["pr", "list", "--repo", args.repo, "--state", "all",
-                           "--json", "number,state,body,headRefName", "--limit", "100"]) or []
+                           "--json", "number,state,body,headRefName,statusCheckRollup",
+                           "--limit", "100"]) or []
             closed = gh_json(["issue", "list", "--repo", args.repo, "--state", "closed",
                               "--json", "number", "--limit", "200"]) or []
         except GhError as e:
@@ -563,6 +610,17 @@ def main(argv: list[str] | None = None) -> int:
                     if decision.intended_action == "would-bounce-coder":
                         mutations += bounce_coder(writer, issue, ctx, decision, run_id,
                                                   args, log, pr_map)
+
+                    # CI-red bounce (BUG-8): a coder PR opened but CI failed → close + re-queue
+                    # to the coder with the failure log, BEFORE the CTO ever reviews it. Also
+                    # deterministic. Attempt cap (same as recovery): exhausted → needs-human,
+                    # leaving the red PR open for a human; otherwise bounce and let the coder fix.
+                    if decision.intended_action == "would-bounce-ci":
+                        if ctx.attempt >= args.max_attempts:
+                            mutations += escalate_ci(writer, ctx, decision, run_id, args, log)
+                        else:
+                            mutations += bounce_ci(writer, issue, ctx, decision, run_id,
+                                                   args, log, pr_map)
 
                     # Phase 2C–2E LLM-dispatch actions (only in dispatch-enabled mode). Each is
                     # fail-safe: a hung/failed harness is a logged no-op, retried next tick.
@@ -971,6 +1029,34 @@ def bounce_coder(writer, issue, ctx, decision, run_id, args, log, pr_map) -> int
     ops = executor.plan_bounce_coder_ops(n, pr["number"], ctx.attempt, run_id,
                                          ctx.marker_comment_id, feedback)
     return _apply_ops(writer, n, ops, log, critical_ops=("close_pr", "edit_labels"))
+
+
+def bounce_ci(writer, issue, ctx, decision, run_id, args, log, pr_map) -> int:
+    """CI-red bounce (BUG-8): a coder PR opened but CI failed → close it and re-queue for the
+    coder, carrying the truncated failing-CI log forward as feedback (the next dispatch reads
+    it via latest_coder_feedback). Deterministic (no LLM) — only gh reads/mutations — so it
+    runs in any writes-enabled mode, like the BUG-5 human bounce. Needs the PR number + the
+    attempt branch (to locate the CI run), so it lives here, not in the pure planner."""
+    n = decision.number
+    pr = pr_map.get(n)
+    if not pr or pr.get("number") is None:
+        log("ci-bounce-no-pr", issue=n)
+        return 0
+    branch = harness.coder_branch(n, ctx.attempt) if ctx.attempt >= 1 else None
+    ci_log = fetch_failed_ci_log(args.repo, branch, log) if branch else ""
+    log("ci-bounce", issue=n, pr=pr["number"], attempt=ctx.attempt,
+        branch=branch, log_chars=len(ci_log))
+    ops = executor.plan_bounce_ci_ops(n, pr["number"], ctx.attempt, run_id,
+                                      ctx.marker_comment_id, ci_log)
+    return _apply_ops(writer, n, ops, log, critical_ops=("close_pr", "edit_labels"))
+
+
+def escalate_ci(writer, ctx, decision, run_id, args, log) -> int:
+    """CI-red retry cap reached → park `needs-human`, leaving the PR open for inspection (BUG-8)."""
+    n = decision.number
+    log("ci-escalate", issue=n, attempt=ctx.attempt, max_attempts=args.max_attempts)
+    ops = executor.plan_ci_escalation_ops(n, ctx.attempt, run_id, ctx.marker_comment_id)
+    return _apply_ops(writer, n, ops, log)
 
 
 def escalate_coder(writer, ctx, decision, run_id, args, log) -> int:
