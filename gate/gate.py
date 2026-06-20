@@ -561,7 +561,10 @@ def main(argv: list[str] | None = None) -> int:
         log_fp.write(json.dumps({"run_id": run_id, "ts": iso(now()), "event": event, **kw}) + "\n")
         log_fp.flush()
 
-    lock_path = runtime / "gate.lock"
+    # Per-repo lock so multiple projects (one scheduled task each) never block one another.
+    # A single global lock would serialize unrelated repos; slug the repo into the filename.
+    repo_slug = re.sub(r"[^A-Za-z0-9._-]", "-", args.repo or "default")
+    lock_path = runtime / f"gate-{repo_slug}.lock"
     try:
         log("start", repo=args.repo, mode=args.mode, scope=args.scope_label)
         if not acquire_lock(lock_path, run_id, args.stale_min, log):

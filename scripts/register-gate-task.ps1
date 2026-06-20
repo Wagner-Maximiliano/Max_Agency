@@ -17,8 +17,10 @@
 .EXAMPLE
   pwsh scripts/register-gate-task.ps1 -Repo owner/repo -Mode deterministic-only -IntervalMinutes 10
 .NOTES
-  Remove with:  Unregister-ScheduledTask -TaskName MaxAgencyGate -Confirm:$false
-  Inspect with: Get-ScheduledTask -TaskName MaxAgencyGate ; Get-ScheduledTaskInfo MaxAgencyGate
+  One task PER repo. The task name defaults to "MaxAgencyGate-<owner>-<repo>" (slugged) so
+  Max Agency can run several projects at once, each with its own tick + its own run lock.
+  List all:     Get-ScheduledTask -TaskName "MaxAgencyGate-*"
+  Remove one:   Unregister-ScheduledTask -TaskName "MaxAgencyGate-<slug>" -Confirm:$false
 #>
 param(
   [Parameter(Mandatory = $true)][string]$Repo,
@@ -27,13 +29,20 @@ param(
   [string]$ScopeLabel = "AI",
   [switch]$NoAutoMerge,
   [string]$CoderModel,                         # per-repo coder model (else the gate default from gate/models.env)
-  [string]$TaskName = "MaxAgencyGate",
+  [string]$TaskName,                         # default: per-repo unique name (one task per project)
   [string]$PythonExe,
   [int]$StaleMin = 35,                       # > the coder timeout (min) so the lock isn't reclaimed mid-build
   [string]$RepoRoot
 )
 
 $ErrorActionPreference = "Stop"
+
+# One scheduled task per project: derive a unique, stable task name from the repo so Max Agency
+# can service several repos at once (each its own tick). Override with -TaskName if needed.
+if (-not $TaskName) {
+  $slug = ($Repo -replace '[^A-Za-z0-9._-]', '-')
+  $TaskName = "MaxAgencyGate-$slug"
+}
 
 if (-not $RepoRoot) {
   # $PSScriptRoot can be empty depending on how the script is launched; fall back to the
