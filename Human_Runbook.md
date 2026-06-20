@@ -1,5 +1,23 @@
 # Human Runbook — Max Agency
 
+> **⚠ RETIRED FLOW — read before following any step below.** As of **Phase 2F** the polling
+> system this runbook describes (per-model `assigned:*` self-selection labels, the WSL hermes
+> *tick* timers, the Claude Code 5-min routine, `orchestrator-mechanics.sh`) has been
+> **decommissioned**. The current system is **the gate** — one deterministic script run by a
+> single Windows Scheduled Task; the human interface is one label, **`AI`**. See
+> **[`gate/README.md`](gate/README.md)** and **[`docs/GATE_ROADMAP.md`](docs/GATE_ROADMAP.md)**.
+> The steps below remain only as historical reference until this runbook is rewritten in
+> Phase 3 ("install once · start/adopt a project · file work · troubleshoot").
+>
+> **Troubleshooting the gate (current system) — where the logs are.** Each gate run writes a
+> decision log to `runtime/logs/gate/<run_id>.jsonl` and, when it calls an LLM, the full
+> prompt + raw reply to `runtime/logs/transcripts/<run_id>.txt`. If an agent "did nothing"
+> (e.g. the coder ran but opened no PR), read its transcript to see exactly what the model
+> said. Both trees are git-ignored and pruned daily by the `MaxAgencyLogCleanup` task
+> (default **7-day** retention; tune with `setup.ps1 -RetentionDays N`, or prune by hand with
+> `pwsh scripts/clean-logs.ps1 -RetentionDays N`). Transcripts never contain secrets. (This
+> note will be folded into the Phase 3 rewrite below.)
+
 > **New here?** Open `max-agency-flow-diagram(Production).html` in a browser — an illustrated, plain-language walkthrough of how the system works and how to install it. This runbook is the precise step-by-step.
 
 ---
@@ -46,7 +64,7 @@ An autonomous multi-agent dev team coordinated through GitHub. You paste prompts
 
 ## Binding docs (every agent reads these)
 
-`Highlevel_Plan_V2.0.md` · `CODING_STANDARDS.md` · `docs/MDP.md` · `docs/AMA.md` · `skills/`
+`Highlevel_Plan_V2.0.md` · `CODING_STANDARDS.md` · `docs/AMA.md` · `skills/`
 
 ## Label scheme (canonical)
 
@@ -469,7 +487,7 @@ STOP.
 Replace `<your-github-username>` in the URL with yours (or paste the agency repo URL you published in Part 1).
 
 ```
-You are the Architect of the Max Agency. Your role contract is at https://github.com/<your-github-username>/Max_Agency/blob/main/agents/architect.md — fetch it (or clone the repo) and follow it exactly. Also read docs/MDP.md, docs/AMA.md, CODING_STANDARDS.md, and Highlevel_Plan_V2.0.md from the same repo.
+You are the Architect of the Max Agency. Your role contract is at https://github.com/<your-github-username>/Max_Agency/blob/main/agents/architect.md — fetch it (or clone the repo) and follow it exactly. Also read docs/AMA.md, CODING_STANDARDS.md, and Highlevel_Plan_V2.0.md from the same repo.
 
 Project brief:
 <one paragraph: goal, constraints, deadline if any>

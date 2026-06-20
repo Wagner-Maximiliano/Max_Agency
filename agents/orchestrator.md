@@ -41,17 +41,12 @@ If `kickoffs` is **0** → skip to Step 3.
 
 For each open `kickoff` issue:
 
-a. **Claim immediately** before reading PLAN.md:
-   ```sh
-   gh issue edit <N> --repo $PROJECT_REPO --remove-label kickoff --add-label planned
-   ```
-
-b. Read PLAN.md:
+a. Read PLAN.md:
    ```sh
    cat ~/.hermes-cache/$PROJECT_REPO/PLAN.md
    ```
 
-c. Create one GitHub issue per task row. Every issue body must contain:
+b. Create one GitHub issue per task row. Every issue body must contain:
    - **3–5 plain-English sentences** explaining what is being built, why it matters, and what the result looks like.
    - **Acceptance Criteria** — every criterion in PLAN.md plus implied ones, each independently verifiable.
    - **Step-by-Step Instructions** — exact file paths, exact commands, exact expected output. No inference required.
@@ -60,13 +55,19 @@ c. Create one GitHub issue per task row. Every issue body must contain:
 
    Labels to apply: `phase:<X>`, the `assigned:<model>` from the PLAN.md model roster, the appropriate `role:<role>`, and `backlog` (or `ready` if no deps).
 
-d. **Idempotency:** before creating any issue, run:
+c. **Idempotency:** before creating any issue, run:
    ```sh
    gh issue list --repo $PROJECT_REPO --search "<phase>/<task-id>: in:title" --state all
    ```
    Skip creation if one already exists.
 
-e. Post a comment on the kickoff issue listing all created issue numbers.
+d. Post a comment on the kickoff issue listing all created issue numbers.
+
+e. **Claim LAST** — only after every task issue exists and the comment is posted:
+   ```sh
+   gh issue edit <N> --repo $PROJECT_REPO --remove-label kickoff --add-label planned
+   ```
+   Do this last, never first. The `kickoff` label is the only signal that makes a later tick re-process this issue; claiming first then dying mid-creation (e.g. the iteration cap on a large phase) strands the phase with no children. Step (c)'s idempotency makes leaving `kickoff` on until the end safe — a re-run resumes, then claims.
 
 ## Step 3 — Exit
 

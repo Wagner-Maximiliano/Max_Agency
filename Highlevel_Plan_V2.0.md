@@ -121,10 +121,7 @@ See `CODING_STANDARDS.md` for full rules. Agency-specific deltas from common pra
 
 ## Frameworks
 
-- **MDP** (Model Development Protocol): defined in `docs/MDP.md`.
-- **AMA** (Agent Multi-Agent protocol): defined in `docs/AMA.md`.
-
-Both are read by every agent on startup.
+- **AMA** (Agent Multi-Agent protocol): defined in `docs/AMA.md`. Read by every agent on startup.
 
 ## Skills
 
@@ -143,7 +140,7 @@ Reusable instructions, recipes, and capability descriptions live in `skills/` as
 
 ```
 agents/                Role contracts (architect, cto, orchestrator, coder)
-docs/                  Laws, Policies, Protocols, Rules (MDP, AMA, ...)
+docs/                  Laws, Policies, Protocols, Rules (AMA, ...)
 skills/                Reusable on-demand instructions (one .md per skill)
 hermes-config/         Hermes-native profile templates, cron jobs, poll prompts
 claude-code-routine/   Task Scheduler routine for the Anthropic side

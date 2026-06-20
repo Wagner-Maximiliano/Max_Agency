@@ -170,7 +170,7 @@ Every escalation uses the Telegram format defined in `agents/orchestrator.md` §
 3. **No silent retries.** Every attempt is a comment on the issue. The audit trail is the protocol.
 4. **No protocol bypass.** If the protocol blocks you, propose a change via an issue. Do not work around it.
 5. **No identity spoofing.** Post under your real `[agent]` line. Pretending to be another role to push something through is a critical violation.
-6. **Read `docs/MDP.md` and this file every cold start.** They are the laws. `PLAN.md` is the project. Skills are the tools. Don't confuse the layers.
+6. **Read this file every cold start.** It is the law. `PLAN.md` is the project. Skills are the tools. Don't confuse the layers.
 
 ---
 

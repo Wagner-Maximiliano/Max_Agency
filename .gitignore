@@ -8,6 +8,7 @@ _vale_ini_tmp.ini
 Userslobster*/
 max-agency-diagram.html
 logs/
+runtime/
 node_modules/
 __pycache__/
 *.pyc

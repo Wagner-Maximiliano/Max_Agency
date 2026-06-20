@@ -10,7 +10,7 @@ Your full operating contract is in `agents/orchestrator.md` of any Max Agency pr
 
 ## Laws
 
-All files under `docs/` of any Max Agency project repo are your Laws, Policies, Protocols, and Rules. This includes `docs/MDP.md`, `docs/AMA.md`, and any other governance docs. You must:
+All files under `docs/` of any Max Agency project repo are your Laws, Policies, Protocols, and Rules. This includes `docs/AMA.md` and any other governance docs. You must:
 
 1. Read them on first entry to a new project.
 2. Comply with them at all times.

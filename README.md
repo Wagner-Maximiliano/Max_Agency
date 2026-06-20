@@ -1,19 +1,33 @@
 # Max Agency — Baseline
 
-Baseline scaffold for an autonomous multi-agent developers agency. Hermes hosts the non-Anthropic roles as isolated profiles (`orchestrator`, `coder`). The Claude Code Windows app hosts the Anthropic roles (Architect, CTO, Anthropic Coder) on a Windows Task Scheduler routine. GitHub is the coordination bus.
+Autonomous multi-agent developers agency. **One deterministic gate** (a cheap script, the
+only scheduled job) reads a GitHub board and wakes exactly one LLM per actionable issue:
+orchestrator triage/expansion (Codex `gpt-5.4-mini`), coder (OpenRouter `xiaomi/mimo-v2.5`
+via hermes in WSL), and architect + CTO (Claude Opus). The human interface is one label,
+**`AI`**: add it to an issue to opt it in; the gate triages → plans → builds → cross-vendor
+reviews → merges. GitHub is the coordination bus.
+
+> **⚠ As of Phase 2F the old polling system is retired.** The per-model `assigned:*`
+> self-selection labels, the WSL hermes *tick* timers, and the Claude Code 5-min routine are
+> gone — replaced by the gate (`gate/`, see [`gate/README.md`](gate/README.md)). The single
+> scheduled job is now one Windows Scheduled Task running the gate
+> (`scripts/register-gate-task.ps1`). Docs below that still describe the old `assigned:*`
+> flow are historical and are being trimmed in Phase 3.
 
 ## Read this first
 
-→ **[`Human_Runbook.md`](Human_Runbook.md)** is the only doc you need. It contains the setup steps and the copy-paste prompts to bootstrap everything.
+→ **[`gate/README.md`](gate/README.md)** — the current system (the gate). The roadmap of
+record is [`docs/GATE_ROADMAP.md`](docs/GATE_ROADMAP.md). `Human_Runbook.md` still documents
+the retired polling flow (Phase 3 will rewrite it).
 
 ## Layout
 
 ```
 agents/                              Role contracts (architect, cto, orchestrator, coder)
-docs/                                Laws, Policies, Protocols, Rules (MDP, AMA, ...)
+docs/                                Laws, Policies, Protocols, Rules (AMA, ...)
 skills/                              Reusable skills agents discover on demand
-hermes-config/                       Hermes-native profile templates, systemd timers, mechanics script
-claude-code-routine/                 Windows Task Scheduler routine for the Anthropic side
+gate/                                The deterministic gate — the current system (see gate/README.md)
+hermes-config/                       Hermes coder profile (the gate's coder harness uses it); deploy.sh syncs it
 templates/                           PLAN.md / State.md skeletons
 scripts/                             PowerShell helpers (state rebuild, project setup)
 .github/                             Issue template, PR template, CI workflow
