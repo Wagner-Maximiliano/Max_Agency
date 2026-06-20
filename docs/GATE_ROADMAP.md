@@ -204,6 +204,13 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
     `TemporaryDirectory(ignore_cleanup_errors=True)` (wsl left the dir busy on Windows → an
     `unexpected` crash) and per-issue try/except in the main loop (one bad issue no longer
     aborts the tick). **Old code kept in git history (reversible).**
+  - **Soak test PASSED end-to-end** ✅ **DONE — 2026-06-20.** First full continuous run on a
+    **real** project (`Surviving_The_AI_World`): issue #59 → triage → architect PLAN → owner
+    `CHANGES:`/`APPROVE` → kickoff #60 → expand → #61/#62 → coder (`openrouter/owl-alpha`) →
+    PR #66 → CI green → CTO `APPROVE_MERGE` (`human_review:False`/`ci_green:True`) → held for
+    owner merge under `--no-auto-merge`. Cross-vendor review held (Opus CTO confirmed the
+    project's no-em-dash rule on OpenRouter-authored prose). Only the owner's manual merge
+    remains, by design.
   - **Soak-test hardening** (live soak on `Surviving_The_AI_World`) ✅ **DONE — 223 unit
     tests, 2026-06-18/20.** Nine bugs + two features: **BUG-9** when an issue accumulates
     several attempt PRs, `build_pr_map` now prefers the OPEN one (OPEN > MERGED > CLOSED, ties

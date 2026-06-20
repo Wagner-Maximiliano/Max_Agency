@@ -79,9 +79,16 @@ with no manual label-fixing and no babysitting.
   specs → the gate creates coder task issues (no-dep `ready`, dep `backlog` + `Depends-on:`
   resolved to real numbers), `expanding` marker before any create (idempotent), then marks
   the kickoff `expanded` + closes it. The full idea→merge chain now connects end to end.
-- **198 gate unit tests passing** (138 through kickoff-expansion + 60 from the soak-test
-  backlog — BUG-1..7 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
-  throwaway repo (test issues created, exercised, then closed). **Setup dependency (2C, reinforced 2E):** the repo
+- **223 gate unit tests passing** (138 through kickoff-expansion + the soak-test
+  backlog — BUG-1..9 + FEAT-1/2, §10–§11, all shipped). Phases 2A–2E + kickoff-expansion validated live on a
+  throwaway repo (test issues created, exercised, then closed). **Soak test PASSED (2026-06-20):**
+  the full continuous pipeline was validated end-to-end on the **real** book project
+  `Surviving_The_AI_World` for the first time — issue #59 → triage → architect PLAN → owner
+  `CHANGES:`→ revised PLAN → owner `APPROVE` → kickoff #60 → expand → coder tasks #61/#62 →
+  coder (`openrouter/owl-alpha`) writes + opens PR #66 → CI green → CTO `APPROVE_MERGE`
+  (`human_review:False`, `ci_green:True`) → held for human merge under `--no-auto-merge`. Every
+  leg fired on a live repo; the only remaining step is the owner's manual merge (by design).
+  **Setup dependency (2C, reinforced 2E):** the repo
   must carry the full workflow label set incl. `role:cto` (the throwaway repo was missing it;
   caught live) — Phase 3 `setup.ps1` must create them. **2D/2E add:** `gh` authed *inside
   WSL* (coder), the `claude` CLI authed (architect/CTO), and the neutral-cwd safeguard.
@@ -287,17 +294,27 @@ otherwise `max_agency` is fine (it is the engine, not a polled project).
 
 ---
 
-## 10. Soak test — known bugs (BUG-1..9 ✅ ALL FIXED)
+## 10. Soak test — known bugs (BUG-1..9 ✅ ALL FIXED) — SOAK TEST PASSED 2026-06-20
 
 Bugs found during the live soak test on `Wagner-Maximiliano/Surviving_The_AI_World`
 (2026-06-18/20). **All nine fixed + unit-tested** (BUG-1/2/3 `429c940`/`4d0f216`/`ab9903a`;
 BUG-4 `7f4eec5`; BUG-5 `3dbb25a`; BUG-6 `74030b2`; BUG-7 `6c9a49c`; BUG-8 `4d681a1`;
-BUG-9 `c11154b`, on
-`claude/epic-faraday-5cbhk1`); owner elected "skip live, just push" so they were shipped on
-the unit suite (**223 tests green**), to be exercised by the running soak test. (BUG-6 was
-found while fixing BUG-5 — the architect lane had the same stale-`CHANGES:` loop.) The spec for each is kept below as the record. Two design decisions resolved
-explicitly: see BUG-1 (compound op over second-pass sweep) and FEAT-1 (single `runtime/`
-log root).
+BUG-9 `c11154b`, on `claude/epic-faraday-5cbhk1`); **223 tests green**. (BUG-6 was
+found while fixing BUG-5 — the architect lane had the same stale-`CHANGES:` loop.)
+
+**OUTCOME — soak test PASSED (2026-06-20).** With all nine fixes in, the full continuous
+pipeline ran end-to-end on the real book repo: issue #59 → triage → architect PLAN → owner
+`CHANGES:` → revised PLAN → `APPROVE` → kickoff #60 → expand → #61/#62 → coder
+(`openrouter/owl-alpha`) → PR #66 → CI green → CTO `APPROVE_MERGE` (`human_review:False`,
+`ci_green:True`) → held for owner merge under `--no-auto-merge`. Cross-vendor review worked
+(Opus CTO confirmed the project's no-em-dash rule held on OpenRouter-authored prose). Notes
+for the next operator: (a) the coder model swapped to `openrouter/owl-alpha` (a better agentic
+writer than mimo/deepseek for prose — opens its own PRs); (b) project style rules must reach
+the coder via the **issue body**, not comments (BUG-7 now forwards them automatically); (c) the
+book's `.vale.ini` was narrowed so only its own deliberate rules gate a PR (spelling/proselint
+demoted to advisory) — a book-repo decision, not a gate change. The spec for each bug is kept
+below as the record. Two design decisions resolved explicitly: see BUG-1 (compound op over
+second-pass sweep) and FEAT-1 (single `runtime/` log root).
 
 > Note: BUG-4 (coder pushes a branch but never opens the PR) is exactly the failure mode the
 > **BUG-3 `--smoke` test detects** — a model that pushes but doesn't `gh pr create` fails the

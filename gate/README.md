@@ -4,7 +4,14 @@ The gate is the single deterministic entry point that replaces the old polling d
 See the roadmap (`Simplification & Reliability Roadmap v3`) for the full design. This
 directory is being built **one phase at a time, beside the old system**.
 
-## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅ + 2F ✅ + soak-hardening ✅ (next: Phase 3 onboarding)
+## Status: Phase 0 ✅ + 2A ✅ + 2B ✅ + 2C ✅ + 2D ✅ + 2E ✅ + 2F ✅ + soak-hardening ✅ + SOAK TEST PASSED ✅ (next: Phase 3 onboarding)
+
+**Soak test PASSED end-to-end (2026-06-20)** on the live book repo
+`Surviving_The_AI_World` — the first full continuous run on a *real* project: issue → triage →
+architect PLAN → owner approve → kickoff → expand → coder (`openrouter/owl-alpha`) → PR #66 →
+CI green → CTO `APPROVE_MERGE` → held for owner merge under `--no-auto-merge`. Every leg fired;
+cross-vendor review (Opus reviewing OpenRouter-authored prose) confirmed the project style
+rules held. See `docs/HANDOVER.md` §10 for the full trace and operator notes.
 
 **Soak-test backlog (2026-06-18/20)** — nine bugs + two features from the live soak test,
 all shipped (223 unit tests): **BUG-9** when an issue has several attempt PRs (after a bounce
