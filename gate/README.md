@@ -110,8 +110,8 @@ architect → plan → approve → kickoff → **expand** → coder → PR → C
 > the repo** (scope label + `role:*` + `backlog`/`ready`/`in-progress`/`plan-ready`/`kickoff`/
 > `needs-human`). A missing label makes the atomic label-edit fail safely (logged, no comment,
 > retried). The authoritative, maintained list is **`SETUP.md` §3** (the root setup-requirements
-> checklist that Phase 3 `setup.ps1` will automate). The old `scripts/setup-project.ps1` does
-> **not** create the correct set — see `SETUP.md`.
+> checklist that `scripts/setup.ps1` automates). The old `scripts/setup-project.ps1` has been
+> removed — `setup.ps1` is the single installer; see `SETUP.md`.
 
 ## Run it
 

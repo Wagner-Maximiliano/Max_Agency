@@ -13,9 +13,9 @@
   merge) or `-NoAutoMerge` (the CTO can approve but every merge waits for a human).
 
 .EXAMPLE
-  pwsh scripts/register-gate-task.ps1 -Repo owner/repo
+  powershell -ExecutionPolicy Bypass -File scripts/register-gate-task.ps1 -Repo owner/repo
 .EXAMPLE
-  pwsh scripts/register-gate-task.ps1 -Repo owner/repo -Mode deterministic-only -IntervalMinutes 10
+  powershell -ExecutionPolicy Bypass -File scripts/register-gate-task.ps1 -Repo owner/repo -Mode deterministic-only -IntervalMinutes 10
 .NOTES
   One task PER repo. The task name defaults to "MaxAgencyGate-<owner>-<repo>" (slugged) so
   Max Agency can run several projects at once, each with its own tick + its own run lock.

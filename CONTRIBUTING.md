@@ -17,7 +17,7 @@ Max Agency is the *engine*, not a project. It provides the agent prompts, script
 
 - **Never hardcode personal paths or usernames.** Use `$env:USERPROFILE` (Windows) or `$HOME` (WSL/bash).
 - **Docs must match the code.** If you change a script behaviour, update the relevant doc in the same PR.
-- **Labels matter.** `setup-project.ps1` defines the canonical label set — if you add a label the pipeline uses, add it there too.
+- **Labels matter.** `scripts/setup.ps1` defines the canonical label set — if you add a label the pipeline uses, add it there too.
 - **No half-finished work.** If it breaks the pipeline, it shouldn't merge.
 
 ## Questions?

@@ -67,13 +67,13 @@ This is the step that makes a repo manageable by Max Agency. Run it once per rep
 Open **PowerShell** and run (substitute your repo):
 
 ```powershell
-pwsh <MaxAgency>\scripts\setup.ps1 -Repo owner/repo -NoAutoMerge
+powershell -ExecutionPolicy Bypass -File <MaxAgency>\scripts\setup.ps1 -Repo owner/repo -NoAutoMerge
 ```
 
 Worked example (the repo we are onboarding now):
 
 ```powershell
-pwsh C:\Users\lobster\Github_Projects\Max_Agency\scripts\setup.ps1 -Repo Wagner-Maximiliano/Expat_Concierge -NoAutoMerge
+powershell -ExecutionPolicy Bypass -File C:\Users\lobster\Github_Projects\Max_Agency\scripts\setup.ps1 -Repo Wagner-Maximiliano/Expat_Concierge -NoAutoMerge
 ```
 
 > Use `-NoAutoMerge` for any **real / live** repo: the CTO can approve, but **every merge
@@ -147,8 +147,8 @@ Because each project has its own task (`MaxAgencyGate-<owner>-<repo>`) and its o
 you can onboard as many repos as you like — they run independently and never block each other.
 
 ```powershell
-pwsh <MaxAgency>\scripts\setup.ps1 -Repo owner/project-a -NoAutoMerge
-pwsh <MaxAgency>\scripts\setup.ps1 -Repo owner/project-b -NoAutoMerge
+powershell -ExecutionPolicy Bypass -File <MaxAgency>\scripts\setup.ps1 -Repo owner/project-a -NoAutoMerge
+powershell -ExecutionPolicy Bypass -File <MaxAgency>\scripts\setup.ps1 -Repo owner/project-b -NoAutoMerge
 Get-ScheduledTask -TaskName "MaxAgencyGate-*"     # see them all
 ```
 

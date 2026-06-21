@@ -17,8 +17,8 @@ creates the full label set (§3, idempotent), and registers the gate as a single
 Windows Scheduled Task (`MaxAgencyGate`, runs via `pythonw.exe` so no console window appears;
 the gate's child `gh`/`codex`/`wsl`/`claude` calls use `CREATE_NO_WINDOW`). It does not invent
 setup — it automates the already-validated items below. (v1.1 covers labels + CLI check +
-scheduler; it does not yet write `PROJECT_REPO`/least-priv token or reconcile the stale
-`scripts/setup-project.ps1` — those remain Phase 3.)
+scheduler; it does not yet write `PROJECT_REPO`/least-priv token — that remains Phase 3. The
+old self-selection-era installer `scripts/setup-project.ps1` has been **removed**.)
 
 > **Maintenance rule (part of the per-phase build loop):** when a phase surfaces an
 > install/config/repo/credential prerequisite, add it here in the same change — with which
@@ -133,13 +133,11 @@ Verify the full set exists:
 gh label list --repo OWNER/REPO --json name --jq '[.labels[].name]'
 ```
 
-> ⚠ **Reconcile the stale installer (Phase 3 task).** The existing
-> `scripts/setup-project.ps1` is the **old** self-selection-era installer and does **not**
-> match the gate: it omits the scope label, `plan-ready`, and `needs-human`, and creates
-> stale labels (`assigned:claude-*`, `assigned:hermes-coder`, `phase:0..7`, `review`,
-> `blocked`, `planned`) plus a Project-board step the gate doesn't use. It is left in place
-> for now (old pollers may still rely on it; see the "build beside the old system" rule).
-> Phase 3 `setup.ps1` replaces it and creates the set above.
+> ✅ **Stale installer removed (Phase 3).** The old self-selection-era installer
+> `scripts/setup-project.ps1` (which created `assigned:*`/`phase:*`/`review`/`blocked` labels
+> the gate doesn't use, and omitted the scope label, `plan-ready`, and `needs-human`) has been
+> **deleted**. `scripts/setup.ps1` is now the single installer and creates exactly the gate
+> label set above.
 
 ## 4. Configuration & credentials  *(needed now — 2A+)*
 

@@ -239,8 +239,8 @@ old pollers are disabled (also: old pollers ignore `AI-GATE-TEST`).
 - **Phase 3 — One-command onboarding.** Collapse setup into one `setup.ps1` that **implements
   the `SETUP.md` checklist** (created/maintained incrementally from Phase 2C on — setup
   requirements are captured the moment each phase surfaces them, not reconstructed here).
-  This includes **reconciling/replacing the stale `scripts/setup-project.ps1`**, which
-  predates the gate (creates `assigned:*`/`phase:*`/`review`/`blocked` labels and omits the
+  This included **removing the stale `scripts/setup-project.ps1`** (now done), which
+  predated the gate (created `assigned:*`/`phase:*`/`review`/`blocked` labels and omitted the
   scope label, `plan-ready`, and `needs-human`). Humans open issues in the GitHub UI (optional
   template auto-applies `AI`); trim `Human_Runbook.md`.
 

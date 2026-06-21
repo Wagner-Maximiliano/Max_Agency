@@ -161,8 +161,8 @@ running the harnesses.
   - `python` / `python3` — runs the gate.
 - Scope label: **`AI-GATE-TEST`** during phases 2A–2E. It flips to **`AI`** only at 2F when
   the old pollers are retired.
-- **Repo must carry the full gate label set** before the gate can act — see `SETUP.md` §3
-  (the old `scripts/setup-project.ps1` does *not* create the right set; reconciled at Phase 3).
+- **Repo must carry the full gate label set** before the gate can act — see `SETUP.md` §3.
+  `scripts/setup.ps1` creates it (the old `scripts/setup-project.ps1` has been removed).
 
 ### Run the gate
 ```sh
@@ -249,9 +249,9 @@ fixes: `TemporaryDirectory(ignore_cleanup_errors=True)` + per-issue try/except i
 already verifies the vendor CLIs, creates the full label set (idempotent), and registers the
 single **hidden** gate task (`pythonw.exe` + `CREATE_NO_WINDOW` on child processes → no console
 window). Used live to onboard the book repo `Surviving_The_AI_World` (with `-NoAutoMerge`) for a
-soak test. **Still TODO for v1.x:** write `PROJECT_REPO` + a least-privilege token, reconcile/
-replace the stale `scripts/setup-project.ps1` (old `assigned:*`/`phase:*` installer), and rewrite
-`Human_Runbook.md` (currently banner-flagged as the retired flow). Original Phase 3 intent:
+soak test. **Still TODO for v1.x:** write `PROJECT_REPO` + a least-privilege token. (Done since:
+the stale `scripts/setup-project.ps1` was removed, and `Human_Runbook.md` was rewritten for the
+gate flow.) Original Phase 3 intent:
 Collapse setup into `setup.ps1 -Repo owner/repo`
 (creates labels incl. `AI`, writes `PROJECT_REPO`, registers the one gate task with a
 least-privilege token, verifies vendor CLIs authed). Optional issue template auto-applies

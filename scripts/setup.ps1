@@ -13,13 +13,13 @@
   freshly-onboarded repo with no `AI` issues is a zero-cost no-op.
 
 .EXAMPLE
-  pwsh scripts/setup.ps1 -Repo owner/repo
+  powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 -Repo owner/repo
 .EXAMPLE
   # First test on a live repo: let the CTO approve, but hold every merge for a human.
-  pwsh scripts/setup.ps1 -Repo owner/repo -NoAutoMerge
+  powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 -Repo owner/repo -NoAutoMerge
 .EXAMPLE
   # Labels only, don't touch the scheduler:
-  pwsh scripts/setup.ps1 -Repo owner/repo -NoTask
+  powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 -Repo owner/repo -NoTask
 #>
 param(
   [Parameter(Mandatory = $true)][string]$Repo,
@@ -124,6 +124,7 @@ GATE_CTO_MODEL=opus
 | model | notes |
 |---|---|
 | ``xiaomi/mimo-v2.5`` | strong coder (default) |
+| ``openrouter/owl-alpha`` | strong prose/writing model -- good agentic behaviour (opens its own PR) |
 | ``anthropic/claude-sonnet-4.6`` | excellent writer -- good for prose/book repos |
 | ``anthropic/claude-opus-4.8`` | top quality, higher cost |
 | ``openai/gpt-5.4`` | strong all-rounder |
